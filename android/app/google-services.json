@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "596680486992",
+    "project_id": "pc-bt-heal",
+    "storage_bucket": "pc-bt-heal.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:596680486992:android:3c60629cd9f23d6cf92155",
+        "android_client_info": {
+          "package_name": "com.example.pc_bt_heal"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpWUl2gsT6GSRGCZWOALLrr4OsBG0nerc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
