@@ -24,7 +24,7 @@ class _SendProblemPageState extends State<SendProblemPage> {
     _loadDoctors();
   }
 
-  /// 🔹 Load all doctors from Firebase
+  ///Load all doctors from Firebase
   Future<void> _loadDoctors() async {
     final snapshot = await FirebaseDatabase.instance.ref('doctors').get();
     if (snapshot.exists) {
@@ -41,7 +41,7 @@ class _SendProblemPageState extends State<SendProblemPage> {
     }
   }
 
-  /// 🔹 Submit problem to Firebase
+  ///Submit problem to Firebase
   Future<void> _submitQuestion() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedDoctorId == null) {
@@ -109,7 +109,6 @@ class _SendProblemPageState extends State<SendProblemPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 🩺 FORM
               Form(
                 key: _formKey,
                 child: Column(
@@ -138,8 +137,6 @@ class _SendProblemPageState extends State<SendProblemPage> {
                             ),
                           ),
                           const SizedBox(height: 16),
-
-                          // Dropdown of doctors
                           DropdownButtonFormField<String>(
                             decoration: const InputDecoration(
                               labelText: "Select Doctor",
@@ -158,8 +155,6 @@ class _SendProblemPageState extends State<SendProblemPage> {
                             v == null ? "Please select a doctor" : null,
                           ),
                           const SizedBox(height: 16),
-
-                          // Problem text
                           TextFormField(
                             controller: questionController,
                             maxLines: 5,
@@ -173,8 +168,6 @@ class _SendProblemPageState extends State<SendProblemPage> {
                                 : null,
                           ),
                           const SizedBox(height: 20),
-
-                          // Submit button
                           Center(
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.send, color: Colors.white),
@@ -210,8 +203,6 @@ class _SendProblemPageState extends State<SendProblemPage> {
                     color: Colors.purple),
               ),
               const SizedBox(height: 12),
-
-              // 🩺 Stream of all patient problems
               StreamBuilder(
                 stream: _problemsRef
                     .orderByChild('patientId')
@@ -321,7 +312,7 @@ class _SendProblemPageState extends State<SendProblemPage> {
     );
   }
 
-  /// 🔹 Fetch doctor’s name
+  //Fetch doctor’s name
   Future<String> _getDoctorName(String doctorId) async {
     final snapshot =
     await FirebaseDatabase.instance.ref('doctors/$doctorId').get();
