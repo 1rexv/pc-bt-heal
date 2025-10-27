@@ -268,7 +268,7 @@ class _SendProblemPageState extends State<SendProblemPage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                "🩹 ${p['problemText']}",
+                                "${p['problemText']}",
                                 style: const TextStyle(fontSize: 16),
                               ),
                               const SizedBox(height: 10),
@@ -287,8 +287,8 @@ class _SendProblemPageState extends State<SendProblemPage> {
                                 ),
                                 child: Text(
                                   hasResponse
-                                      ? "👨‍⚕️ Doctor’s Response: ${p['response']}"
-                                      : "⌛ Waiting for doctor’s response...",
+                                      ? "Doctor’s Response: ${p['response']}"
+                                      : "Waiting for doctor’s response...",
                                   style: TextStyle(
                                     color: hasResponse
                                         ? Colors.green.shade800
