@@ -127,7 +127,7 @@ class _RespondToProblemsPageState extends State<RespondToProblemsPage> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        "🩺 Problem:",
+                        "Problem:",
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: Colors.grey.shade800,
@@ -152,7 +152,7 @@ class _RespondToProblemsPageState extends State<RespondToProblemsPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              "👨‍⚕️ Doctor’s Response:",
+                              "Doctor’s Response:",
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: Colors.black87,
@@ -182,7 +182,7 @@ class _RespondToProblemsPageState extends State<RespondToProblemsPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              "💬 Your Response:",
+                              "Your Response:",
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: Colors.black87,
