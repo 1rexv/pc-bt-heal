@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class MedicationInfoPage extends StatefulWidget {
   const MedicationInfoPage({super.key});
@@ -9,41 +11,48 @@ class MedicationInfoPage extends StatefulWidget {
 
 class _MedicationInfoPageState extends State<MedicationInfoPage> {
   final TextEditingController _searchController = TextEditingController();
-
-  // Example medication data
-  List<Map<String, String>> medications = [
-    {
-      "name": "Paracetamol",
-      "usage": "Pain relief, fever reducer",
-      "dosage": "500mg every 4-6 hours",
-      "sideEffects": "Nausea, rash, liver issues (in high doses)"
-    },
-    {
-      "name": "Amoxicillin",
-      "usage": "Antibiotic for infections",
-      "dosage": "500mg every 8 hours for 7 days",
-      "sideEffects": "Diarrhea, nausea, allergic reaction"
-    },
-    {
-      "name": "Folic Acid",
-      "usage": "Supports fetal development, prevents birth defects",
-      "dosage": "400-800 mcg daily",
-      "sideEffects": "Rare: nausea, bloating"
-    },
-  ];
-
-  List<Map<String, String>> filteredMedications = [];
+  List<Map<String, dynamic>> _medications = [];
+  List<Map<String, dynamic>> _filteredMedications = [];
 
   @override
   void initState() {
     super.initState();
-    filteredMedications = medications;
+    _fetchMedications();
+  }
+
+  Future<void> _fetchMedications() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final snapshot = await FirebaseDatabase.instance.ref('medicines').get();
+
+    if (snapshot.exists) {
+      final data = Map<String, dynamic>.from(snapshot.value as Map);
+
+      final meds = data.entries
+          .map((e) => Map<String, dynamic>.from(e.value))
+          .where((m) => (m['patientEmail'] ?? '') == user.email)
+          .toList();
+
+      setState(() {
+        _medications = meds.reversed.toList();
+        _filteredMedications = _medications;
+      });
+    }
   }
 
   void _filterMedications(String query) {
     setState(() {
-      filteredMedications = medications
-          .where((med) => med['name']!.toLowerCase().contains(query.toLowerCase()))
+      _filteredMedications = _medications
+          .where((med) =>
+      (med['name'] ?? '')
+          .toString()
+          .toLowerCase()
+          .contains(query.toLowerCase()) ||
+          (med['doctorName'] ?? '')
+              .toString()
+              .toLowerCase()
+              .contains(query.toLowerCase()))
           .toList();
     });
   }
@@ -52,7 +61,8 @@ class _MedicationInfoPageState extends State<MedicationInfoPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Medication Info", style: TextStyle(color: Colors.white)),
+        title:
+        const Text("My Prescribed Medications", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.purple,
         centerTitle: true,
       ),
@@ -63,7 +73,7 @@ class _MedicationInfoPageState extends State<MedicationInfoPage> {
             TextField(
               controller: _searchController,
               decoration: const InputDecoration(
-                hintText: "Search medication by name",
+                hintText: "Search medication or doctor name",
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),
@@ -71,36 +81,71 @@ class _MedicationInfoPageState extends State<MedicationInfoPage> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: filteredMedications.isEmpty
-                  ? const Center(child: Text("No medication found"))
+              child: _filteredMedications.isEmpty
+                  ? const Center(
+                child: Text(
+                  "No medication found.",
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+              )
                   : ListView.builder(
-                itemCount: filteredMedications.length,
+                itemCount: _filteredMedications.length,
                 itemBuilder: (context, index) {
-                  final med = filteredMedications[index];
+                  final med = _filteredMedications[index];
                   return Card(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    elevation: 3,
                     margin: const EdgeInsets.symmetric(vertical: 8),
                     child: Padding(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(14),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            med['name']!,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          Row(
+                            children: [
+                              const Icon(Icons.medication, color: Colors.purple),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  med['name'] ?? '',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.purple,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
-                          Text("Usage: ${med['usage']}"),
-                          Text("Dosage: ${med['dosage']}"),
-                          Text("Side Effects: ${med['sideEffects']}"),
+                          Text(
+                            "Prescribed by: ${med['doctorEmail'] ?? 'Unknown Doctor'}",
+                            style: const TextStyle(
+                                fontStyle: FontStyle.italic,
+                                color: Colors.black87),
+                          ),
+                          const SizedBox(height: 4),
+                          Text("Dosage: ${med['dosage'] ?? '-'}"),
+                          Text(
+                            "Duration: ${med['duration'] ?? '-'} ${med['durationType'] ?? ''}",
+                            style: const TextStyle(
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Date: ${DateTime.tryParse(med['timestamp'] ?? '')?.toLocal().toString().split(' ')[0] ?? 'Unknown'}",
+                            style: const TextStyle(
+                                color: Colors.grey, fontSize: 12),
+                          ),
                         ],
                       ),
                     ),
                   );
                 },
               ),
-            )
+            ),
           ],
         ),
       ),
