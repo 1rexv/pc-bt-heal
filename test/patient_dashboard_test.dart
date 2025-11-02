@@ -5,7 +5,6 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 
-// Generate mock classes for FirebaseDatabase and DatabaseReference
 class MockDatabaseReference extends Mock implements DatabaseReference {}
 class MockDatabaseEvent extends Mock implements DatabaseEvent {}
 class MockDataSnapshot extends Mock implements DataSnapshot {}
@@ -22,12 +21,11 @@ void main() {
     mockSnapshot = MockDataSnapshot();
   });
 
-  testWidgets('Automated search filters doctor list',
+  testWidgets('Automated search filters doctor name and address',
           (WidgetTester tester) async {
-        // Mock Firebase data
         final fakeData = {
           'doc1': {
-            'fullName': 'Sarah ali',
+            'fullName': 'Sarah Ali',
             'address': 'Muscat',
             'enabled': true,
           },
@@ -38,13 +36,12 @@ void main() {
           },
         };
 
-        // Simulate Firebase snapshot
+        //Simulate Firebase snapshot
         when(mockSnapshot.value).thenReturn(fakeData);
         when(mockEvent.snapshot).thenReturn(mockSnapshot);
-        when(mockRef.onValue)
-            .thenAnswer((_) => Stream.fromIterable([mockEvent]));
+        when(mockRef.onValue).thenAnswer((_) => Stream.fromIterable([mockEvent]));
 
-        // Build the widget
+        //Build the PatientDashboardPage
         await tester.pumpWidget(
           const MaterialApp(home: PatientDashboardPage()),
         );
@@ -52,17 +49,28 @@ void main() {
         // Wait for doctors to load
         await tester.pumpAndSettle();
 
-        // Verify both doctors initially appear
-        expect(find.text('Dr. Sarah Johnson'), findsOneWidget);
-        expect(find.text('Dr. Ahmed Hassan'), findsOneWidget);
+        // Verify both doctors initially appear (name + address)
+        expect(find.text('Sarah Ali'), findsOneWidget);
+        expect(find.text('Muscat'), findsOneWidget);
+        expect(find.text('Ahmed Hassan'), findsOneWidget);
+        expect(find.text('Sohar'), findsOneWidget);
 
-        // Type "Sarah" into the search bar
-        await tester.enterText(
-            find.byType(TextField), 'Sarah');
+        await tester.enterText(find.byType(TextField), 'Sarah');
         await tester.pumpAndSettle();
 
-        // Verify filtered result
-        expect(find.text('Dr. Sarah Johnson'), findsOneWidget);
-        expect(find.text('Dr. Ahmed Hassan'), findsNothing);
+        // Verify filtered result (name & address)
+        expect(find.text('Sarah Ali'), findsOneWidget);
+        expect(find.text('Muscat'), findsOneWidget);
+        expect(find.text('Ahmed Hassan'), findsNothing);
+        expect(find.text('Sohar'), findsNothing);
+
+        await tester.enterText(find.byType(TextField), 'Sohar');
+        await tester.pumpAndSettle();
+
+        //Verify only Ahmed shows (matching address)
+        expect(find.text('Ahmed Hassan'), findsOneWidget);
+        expect(find.text('Sohar'), findsOneWidget);
+        expect(find.text('Sarah Ali'), findsNothing);
+        expect(find.text('Muscat'), findsNothing);
       });
 }
