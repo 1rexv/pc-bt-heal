@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'AcceptAppointmentsPage.dart';
 import 'DoctorReportPage.dart';
-//import 'DoctorFeedbackPage.dart';
-//import 'AddUpdateMedicinePage.dart';
-//import 'RespondToProblemsPage.dart';
+import 'DoctorFeedbackPage.dart';
+import 'AddUpdateMedicinePage.dart';
+import 'RespondToProblemsPage.dart';
 
 class DoctorDashboardPage extends StatelessWidget {
   const DoctorDashboardPage({super.key});
@@ -44,10 +44,10 @@ class DoctorDashboardPage extends StatelessWidget {
               title: const Text('Respond to Patient Problems', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
-                /*Navigator.push(
+                Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const RespondToProblemsPage()),
-                );*/
+                );
               },
             ),
           ),
@@ -60,10 +60,10 @@ class DoctorDashboardPage extends StatelessWidget {
               title: const Text('Add / Update Medicine Details', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
-                /*Navigator.push(
+                Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const AddUpdateMedicinePage()),
-                );*/
+                );
               },
             ),
           ),
@@ -76,10 +76,10 @@ class DoctorDashboardPage extends StatelessWidget {
               title: const Text('Send Feedback to Admin', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
-                /*Navigator.push(
+                Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const DoctorFeedbackPage()),
-                );*/
+                );
               },
             ),
           ),
@@ -94,7 +94,7 @@ class DoctorDashboardPage extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const DoctorReportPage()),
+                  MaterialPageRoute(builder: (context) => DoctorReportPage()),
                 );
               },
 
