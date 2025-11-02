@@ -71,7 +71,11 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
 
     final data = Map<String, dynamic>.from(snapshot.value as Map);
     final doctorMeds = data.entries
-        .map((e) => Map<String, dynamic>.from(e.value))
+        .map((e) {
+      final med = Map<String, dynamic>.from(e.value);
+      med['key'] = e.key;
+      return med;
+    })
         .where((m) => (m['doctorEmail'] ?? '') == doctor.email)
         .toList();
 
@@ -90,7 +94,7 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
         dosage.isEmpty ||
         durationValue.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ Please fill in all required fields')),
+        const SnackBar(content: Text('Please fill in all required fields')),
       );
       return;
     }
@@ -98,12 +102,13 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
     final doctor = FirebaseAuth.instance.currentUser;
     if (doctor == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ Please login as doctor first')),
+        const SnackBar(content: Text('Please login as doctor first')),
       );
       return;
     }
 
     if (_editingMedicineId != null) {
+      print("Updating medicine with ID: $_editingMedicineId");
       await _medicinesRef.child(_editingMedicineId!).update({
         'name': name,
         'dosage': dosage,
@@ -112,11 +117,10 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
         'timestamp': DateTime.now().toIso8601String(),
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Medicine updated successfully!')),
+        const SnackBar(content: Text('Medicine updated successfully!')),
       );
       _editingMedicineId = null;
     } else {
-      // Add new medicine
       final newMedRef = _medicinesRef.push();
       await newMedRef.set({
         'medicineId': newMedRef.key,
@@ -136,6 +140,7 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
       );
     }
 
+    // Clear form
     _nameController.clear();
     _dosageController.clear();
     _durationController.clear();
@@ -155,10 +160,9 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
     await _loadMedicineHistory();
   }
 
-  //Edit a medicine
   void _editMedicine(Map<String, dynamic> med) {
     setState(() {
-      _editingMedicineId = med['medicineId'];
+      _editingMedicineId = med['key'];
       _nameController.text = med['name'] ?? '';
       _dosageController.text = med['dosage'] ?? '';
       _durationController.text = med['duration'] ?? '';
@@ -174,8 +178,8 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-        const Text('Add / Update Medicine', style: TextStyle(color: Colors.white)),
+        title: const Text('Add / Update Medicine',
+            style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.purple,
         centerTitle: true,
       ),
@@ -183,7 +187,6 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            //Input form
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -210,13 +213,12 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                     items: _patients.map((p) {
                       return DropdownMenuItem<Map<String, dynamic>>(
                         value: p,
-                        child: Text('${p['name']}'),
+                        child: Text(p['name']),
                       );
                     }).toList(),
                     onChanged: (val) => setState(() => _selectedPatient = val),
                   ),
                   const SizedBox(height: 20),
-
                   TextField(
                     controller: _nameController,
                     decoration: InputDecoration(
@@ -227,7 +229,6 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   TextField(
                     controller: _dosageController,
                     decoration: InputDecoration(
@@ -238,7 +239,6 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   Row(
                     children: [
                       Expanded(
@@ -266,8 +266,10 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                           ),
                           items: const [
                             DropdownMenuItem(value: 'Days', child: Text('Days')),
-                            DropdownMenuItem(value: 'Weeks', child: Text('Weeks')),
-                            DropdownMenuItem(value: 'Months', child: Text('Months')),
+                            DropdownMenuItem(
+                                value: 'Weeks', child: Text('Weeks')),
+                            DropdownMenuItem(
+                                value: 'Months', child: Text('Months')),
                           ],
                           onChanged: (val) {
                             if (val != null) setState(() => _durationType = val);
@@ -277,16 +279,18 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                     ],
                   ),
                   const SizedBox(height: 24),
-
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.purple,
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 12),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                     ),
-                    icon: Icon(_editingMedicineId == null ? Icons.save : Icons.update),
+                    icon: Icon(_editingMedicineId == null
+                        ? Icons.save
+                        : Icons.update),
                     label: Text(
                       _editingMedicineId == null ? 'Submit' : 'Update',
                       style: const TextStyle(fontSize: 16),
@@ -297,8 +301,6 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
               ),
             ),
             const SizedBox(height: 30),
-
-            //History
             const Text(
               "Medicine History",
               style: TextStyle(
@@ -307,7 +309,6 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                   color: Colors.purple),
             ),
             const SizedBox(height: 10),
-
             _medicineHistory.isEmpty
                 ? const Text("No medicines found.")
                 : ListView.builder(
@@ -335,13 +336,15 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                       spacing: 8,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.green),
+                          icon:
+                          const Icon(Icons.edit, color: Colors.green),
                           onPressed: () => _editMedicine(med),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
+                          icon:
+                          const Icon(Icons.delete, color: Colors.red),
                           onPressed: () =>
-                              _deleteMedicine(med['medicineId']),
+                              _deleteMedicine(med['key']),
                         ),
                       ],
                     ),
