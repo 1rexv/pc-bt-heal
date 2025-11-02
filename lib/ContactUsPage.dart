@@ -26,46 +26,24 @@ class ContactUsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final purple = Colors.purple;
+    const purple = Colors.purple;
 
     return Scaffold(
       backgroundColor: Colors.purple.shade50,
       appBar: AppBar(
-        title: const Text('Module 3 • Social Media', style: TextStyle(color: Colors.white)),
+        title: const Text('Social Media', style: TextStyle(color: Colors.white)),
         backgroundColor: purple,
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Intro
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))],
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.share, color: purple),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'Stay connected with HealthApp across our official channels.',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 16),
 
-          // M3F1 — Instagram
+          // Instagram Card
           _buildContactCard(
             context: context,
             purple: purple,
-            featureCode: 'M3F1',
             icon: Icons.camera_alt,
             platform: 'Instagram',
             handle: '@omanimoh',
@@ -75,11 +53,10 @@ class ContactUsPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // M3F2 — LinkedIn
+          // LinkedIn Card
           _buildContactCard(
             context: context,
             purple: purple,
-            featureCode: 'M3F2',
             icon: Icons.business,
             platform: 'LinkedIn',
             handle: 'Reem Alrawahi',
@@ -95,7 +72,6 @@ class ContactUsPage extends StatelessWidget {
   Widget _buildContactCard({
     required BuildContext context,
     required Color purple,
-    required String featureCode,
     required IconData icon,
     required String platform,
     required String handle,
@@ -113,7 +89,6 @@ class ContactUsPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header row (icon + platform + feature code chip)
               Row(
                 children: [
                   CircleAvatar(
@@ -132,28 +107,11 @@ class ContactUsPage extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: purple.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: purple.withOpacity(0.25)),
-                    ),
-                    child: Text(
-                      featureCode,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.purple.shade700,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ],
               ),
 
               const SizedBox(height: 8),
 
-              // Handle
               Text(
                 handle,
                 style: const TextStyle(
@@ -168,12 +126,13 @@ class ContactUsPage extends StatelessWidget {
               // Description
               Text(
                 description,
-                style: const TextStyle(fontSize: 14, color: Colors.black54, height: 1.35),
+                style:
+                const TextStyle(fontSize: 14, color: Colors.black54, height: 1.35),
               ),
 
               const SizedBox(height: 12),
 
-              // Actions
+              //Action button
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -183,10 +142,13 @@ class ContactUsPage extends StatelessWidget {
                       foregroundColor: Colors.white,
                       backgroundColor: purple,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
                     ),
-                    icon: const Icon(Icons.open_in_new, size: 18, color: Colors.white),
-                    label: const Text('Open', style: TextStyle(color: Colors.white)),
+                    icon: const Icon(Icons.open_in_new,
+                        size: 18, color: Colors.white),
+                    label:
+                    const Text('Open', style: TextStyle(color: Colors.white)),
                   ),
                 ],
               ),
