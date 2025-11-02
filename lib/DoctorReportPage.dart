@@ -3,7 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 
 class DoctorReportPage extends StatefulWidget {
-  const DoctorReportPage({super.key});
+  final FirebaseDatabase database; // allows mock injection for tests
+
+  DoctorReportPage({super.key, FirebaseDatabase? database})
+      : database = database ?? FirebaseDatabase.instance;
 
   @override
   State<DoctorReportPage> createState() => _DoctorReportPageState();
@@ -27,7 +30,7 @@ class _DoctorReportPageState extends State<DoctorReportPage> {
     if (currentUser == null) return;
 
     try {
-      final appointmentsRef = FirebaseDatabase.instance.ref("appointments");
+      final appointmentsRef = widget.database.ref("appointments");
 
       final snapshot = await appointmentsRef
           .orderByChild("doctorEmail")
@@ -52,7 +55,6 @@ class _DoctorReportPageState extends State<DoctorReportPage> {
             pending++;
           }
 
-          // Get doctor's name (only once)
           doctorName = appointment["doctorName"] ?? doctorName;
         });
       }
@@ -73,7 +75,10 @@ class _DoctorReportPageState extends State<DoctorReportPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Doctor Case Report', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Doctor Case Report',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.purple,
         centerTitle: true,
       ),
@@ -93,51 +98,57 @@ class _DoctorReportPageState extends State<DoctorReportPage> {
             ),
             const SizedBox(height: 20),
 
-            // ✅ Total cases
+            // Total cases
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               child: ListTile(
-                leading: const Icon(Icons.pregnant_woman, color: Colors.purple),
+                leading: const Icon(Icons.pregnant_woman,
+                    color: Colors.purple),
                 title: const Text('Total Cases'),
                 trailing: Text(
                   '$_totalCases',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
 
             const SizedBox(height: 16),
 
-            // ✅ Treated cases
+            // Treated cases
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               child: ListTile(
-                leading: const Icon(Icons.check_circle, color: Colors.green),
+                leading:
+                const Icon(Icons.check_circle, color: Colors.green),
                 title: const Text('Treated / Completed'),
                 trailing: Text(
                   '$_treatedCases',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
 
             const SizedBox(height: 16),
 
-            // ✅ Pending cases
+            // Pending cases
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               child: ListTile(
-                leading: const Icon(Icons.pending_actions, color: Colors.orange),
+                leading: const Icon(Icons.pending_actions,
+                    color: Colors.orange),
                 title: const Text('Pending'),
                 trailing: Text(
                   '$_pendingCases',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
