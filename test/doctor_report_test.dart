@@ -5,21 +5,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:pc_bt_heal/DoctorReportPage.dart';
 
-
 class MockUser extends Mock implements User {
   @override
-  String? get email => 'zahra@heal.com';
+  String? get email => 'z@gmail.com';
 }
 
 class MockFirebaseAuth extends Mock implements FirebaseAuth {}
-class MockDatabaseReference extends Mock implements DatabaseReference {}
-class MockDataSnapshot extends Mock implements DataSnapshot {}
 class MockFirebaseDatabase extends Mock implements FirebaseDatabase {}
+class MockDatabaseReference extends Mock implements DatabaseReference {}
+class MockQuery extends Mock implements Query {}
+class MockDataSnapshot extends Mock implements DataSnapshot {}
 
 void main() {
   late MockFirebaseAuth mockAuth;
   late MockFirebaseDatabase mockDatabase;
   late MockDatabaseReference mockRef;
+  late MockQuery mockQuery;
   late MockDataSnapshot mockSnapshot;
   late MockUser mockUser;
 
@@ -27,34 +28,46 @@ void main() {
     mockAuth = MockFirebaseAuth();
     mockDatabase = MockFirebaseDatabase();
     mockRef = MockDatabaseReference();
+    mockQuery = MockQuery();
     mockSnapshot = MockDataSnapshot();
     mockUser = MockUser();
 
-    // fake auth user
+    //Fake user
     when(mockAuth.currentUser).thenReturn(mockUser);
 
-
+    //Database and query chain
     when(mockDatabase.ref('appointments')).thenReturn(mockRef);
-    when(mockRef.orderByChild('doctorEmail')).thenReturn(mockRef);
-    when(mockRef.equalTo('z@gmail.com')).thenReturn(mockRef);
-    when(mockRef.get()).thenAnswer((_) async => mockSnapshot);
-    when(mockSnapshot.exists).thenReturn(false);
+    when(mockRef.orderByChild('doctorEmail')).thenReturn(mockQuery);
+    when(mockQuery.equalTo('z@gmail.com')).thenReturn(mockQuery);
+    when(mockQuery.get()).thenAnswer((_) async => mockSnapshot);
+
+    //Fake snapshot data
+    when(mockSnapshot.exists).thenReturn(true);
+    when(mockSnapshot.value).thenReturn({
+      'case1': {'doctorEmail': 'z@gmail.com', 'doctorName': 'zahra mohammed', 'status': 'treated'},
+      'case2': {'doctorEmail': 'z@gmail.com', 'doctorName': 'zahra mohammed', 'status': 'pending'},
+      'case3': {'doctorEmail': 'z@gmail.com', 'doctorName': 'zahra mohammed', 'status': 'completed'},
+    });
   });
 
-
-  testWidgets('PASS TEST: Doctor report page builds successfully', (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: DoctorReportPage()));
-
-
+  //PASS TEST
+  testWidgets('PASS TEST: Doctor report page builds and shows cases', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(home: DoctorReportPage(database: mockDatabase)),
+    );
+    await tester.pumpAndSettle(const Duration(seconds: 1));
     expect(find.text('Doctor Case Report'), findsOneWidget);
-    // shows progress while loading
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.textContaining('Total'), findsOneWidget);
+    expect(find.textContaining('Treated'), findsOneWidget);
+    expect(find.textContaining('Pending'), findsOneWidget);
   });
 
+  // FAIL TEST
   testWidgets('FAIL TEST: Wrong text should fail', (WidgetTester tester) async {
-    await tester.pumpWidget(const MaterialApp(home: DoctorReportPage()));
+    await tester.pumpWidget(
+      MaterialApp(home: DoctorReportPage(database: mockDatabase)),
+    );
     await tester.pumpAndSettle();
-    // intentionally failing expectation
-    expect(find.text('Fake Doctor Report'), findsOneWidget);
+    expect(find.text('Fake Doctor Report'), findsOneWidget); //should fail
   });
 }
