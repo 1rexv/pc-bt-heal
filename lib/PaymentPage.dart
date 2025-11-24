@@ -6,7 +6,7 @@ class PaymentPage extends StatefulWidget {
   final String doctorName;
   final String appointmentDate;
   final double amount;
-  final String? appointmentKey; // 🔹 add appointment ID to update it in Firebase
+  final String? appointmentKey;
 
   const PaymentPage({
     super.key,
@@ -28,17 +28,37 @@ class _PaymentPageState extends State<PaymentPage> {
 
   bool _isProcessing = false;
 
-  /// 🔹 Process payment and mark appointment as paid in Firebase
+  bool _isExpiryValid(String value) {
+    if (!value.contains('/') || value.length != 5) return false;
+
+    final parts = value.split('/');
+    final month = int.tryParse(parts[0]);
+    final year = int.tryParse(parts[1]);
+
+    if (month == null || year == null) return false;
+    if (month < 1 || month > 12) return false;
+
+    final now = DateTime.now();
+    final currentMonth = now.month;
+    final currentYearTwoDigits = now.year % 100;
+
+    // Check if card year is in the past
+    if (year < currentYearTwoDigits) return false;
+
+    // Same year but old month
+    if (year == currentYearTwoDigits && month < currentMonth) return false;
+
+    return true;
+  }
+
   Future<void> _processPayment() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isProcessing = true);
 
     try {
-      // Simulate payment delay (for realism)
       await Future.delayed(const Duration(seconds: 2));
 
-      // 🔹 Update the appointment as "paid" in Firebase
       if (widget.appointmentKey != null && widget.appointmentKey!.isNotEmpty) {
         final DatabaseReference appointmentRef = FirebaseDatabase.instance
             .ref("appointments")
@@ -51,7 +71,6 @@ class _PaymentPageState extends State<PaymentPage> {
 
       setState(() => _isProcessing = false);
 
-      // 🔹 Show success message
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -103,6 +122,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 ),
               ),
               const SizedBox(height: 16),
+
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
@@ -133,6 +153,7 @@ class _PaymentPageState extends State<PaymentPage> {
                             fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 24),
+
                       TextFormField(
                         controller: cardNumberController,
                         decoration: const InputDecoration(
@@ -147,6 +168,7 @@ class _PaymentPageState extends State<PaymentPage> {
                             : null,
                       ),
                       const SizedBox(height: 16),
+
                       Row(
                         children: [
                           Expanded(
@@ -156,10 +178,15 @@ class _PaymentPageState extends State<PaymentPage> {
                                 labelText: "Expiry (MM/YY)",
                                 border: OutlineInputBorder(),
                               ),
-                              validator: (value) =>
-                              value == null || !value.contains('/')
-                                  ? "Enter valid expiry"
-                                  : null,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return "Enter expiry date";
+                                }
+                                if (!_isExpiryValid(value)) {
+                                  return "Card is expired or invalid";
+                                }
+                                return null;
+                              },
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -172,8 +199,8 @@ class _PaymentPageState extends State<PaymentPage> {
                               ),
                               keyboardType: TextInputType.number,
                               obscureText: true,
-                              validator: (value) => value == null ||
-                                  value.length != 3
+                              validator: (value) =>
+                              value == null || value.length != 3
                                   ? "Enter valid 3-digit CVV"
                                   : null,
                             ),
@@ -181,6 +208,7 @@ class _PaymentPageState extends State<PaymentPage> {
                         ],
                       ),
                       const SizedBox(height: 24),
+
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.purple,
