@@ -1,13 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'DoctorLoginPage.dart';
 import 'AdminLoginPage.dart';
 import 'PatientLoginPage.dart';
 import 'ContactUsPage.dart';
 
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  debugPrint('Handling a background message: ${message.messageId}');
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  final messaging = FirebaseMessaging.instance;
+  final settings = await messaging.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
+  debugPrint('Notification permission: ${settings.authorizationStatus}');
+
+  final token = await messaging.getToken();
+  debugPrint('FCM device token: $token');
+
   runApp(const MyApp());
 }
 
@@ -21,6 +42,29 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.light;
   String _language = 'English';
+
+  @override
+  void initState() {
+    super.initState();
+
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      final notification = message.notification;
+      if (notification != null) {
+        final title = notification.title ?? 'New notification';
+        final body = notification.body ?? '';
+
+        final ctx = navigatorKey.currentContext;
+        if (ctx != null) {
+          ScaffoldMessenger.of(ctx).showSnackBar(
+            SnackBar(content: Text('$title\n$body')),
+          );
+        }
+      }
+    });
+  }
+
+  static final GlobalKey<NavigatorState> navigatorKey =
+  GlobalKey<NavigatorState>();
 
   void _toggleTheme(bool isDarkMode) {
     setState(() {
@@ -39,9 +83,10 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _MyAppState.navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Heal System',
-      themeMode: _themeMode, // ✅ global theme controller
+      themeMode: _themeMode,
       theme: ThemeData.from(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.deepPurple,
@@ -67,7 +112,6 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-// ✅ Make HealSystem Stateful so the switch rebuilds
 class HealSystem extends StatefulWidget {
   final String title;
   final void Function(bool) onThemeChanged;
@@ -106,9 +150,11 @@ class _HealSystemState extends State<HealSystem> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Welcome!', style: TextStyle(color: Colors.white, fontSize: 24)),
+                  Text('Welcome!',
+                      style: TextStyle(color: Colors.white, fontSize: 24)),
                   SizedBox(height: 8),
-                  Text('Choose login type:', style: TextStyle(color: Colors.white70)),
+                  Text('Choose login type:',
+                      style: TextStyle(color: Colors.white70)),
                 ],
               ),
             ),
@@ -157,7 +203,6 @@ class _HealSystemState extends State<HealSystem> {
                 onChanged: widget.onLanguageChanged,
               ),
             ),
-            // ✅ Dark Mode Switch now triggers global rebuild
             SwitchListTile(
               title: const Text('Dark Mode'),
               value: widget.isDarkMode,
@@ -183,7 +228,10 @@ class _HealSystemState extends State<HealSystem> {
               const SizedBox(height: 24),
               const Text(
                 "Welcome to Heal System",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.purple),
+                style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.purple),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
@@ -199,8 +247,10 @@ class _HealSystemState extends State<HealSystem> {
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purple,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 32, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30)),
                 ),
                 onPressed: () {
                   Navigator.push(
@@ -208,7 +258,8 @@ class _HealSystemState extends State<HealSystem> {
                     MaterialPageRoute(builder: (_) => const PatientLoginPage()),
                   );
                 },
-                child: const Text("Get Started", style: TextStyle(color: Colors.white, fontSize: 16)),
+                child: const Text("Get Started",
+                    style: TextStyle(color: Colors.white, fontSize: 16)),
               ),
             ],
           ),
