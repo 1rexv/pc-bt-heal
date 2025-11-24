@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -14,10 +15,20 @@ class _MedicationInfoPageState extends State<MedicationInfoPage> {
   List<Map<String, dynamic>> _medications = [];
   List<Map<String, dynamic>> _filteredMedications = [];
 
+  StreamSubscription<DatabaseEvent>? _notifSub;
+
   @override
   void initState() {
     super.initState();
     _fetchMedications();
+    _listenToNotifications();
+  }
+
+  @override
+  void dispose() {
+    _notifSub?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchMedications() async {
@@ -38,7 +49,44 @@ class _MedicationInfoPageState extends State<MedicationInfoPage> {
         _medications = meds.reversed.toList();
         _filteredMedications = _medications;
       });
+    } else {
+      setState(() {
+        _medications = [];
+        _filteredMedications = [];
+      });
     }
+  }
+
+  // 🔔 Listen to notification node for this patient
+  void _listenToNotifications() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final ref = FirebaseDatabase.instance.ref('patientNotifications');
+
+    _notifSub = ref
+        .orderByChild('patientEmail')
+        .equalTo(user.email)
+        .onChildAdded
+        .listen((event) {
+      if (!event.snapshot.exists) return;
+
+      final data = Map<String, dynamic>.from(event.snapshot.value as Map);
+
+      final title = (data['title'] ?? 'New notification').toString();
+      final body = (data['body'] ?? '').toString();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$title\n$body'),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+
+      _fetchMedications();
+    });
   }
 
   void _filterMedications(String query) {
@@ -61,8 +109,8 @@ class _MedicationInfoPageState extends State<MedicationInfoPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-        const Text("My Prescribed Medications", style: TextStyle(color: Colors.white)),
+        title: const Text("My Prescribed Medications",
+            style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.purple,
         centerTitle: true,
       ),
@@ -104,7 +152,8 @@ class _MedicationInfoPageState extends State<MedicationInfoPage> {
                         children: [
                           Row(
                             children: [
-                              const Icon(Icons.medication, color: Colors.purple),
+                              const Icon(Icons.medication,
+                                  color: Colors.purple),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
