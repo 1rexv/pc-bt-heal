@@ -29,14 +29,48 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
-  // 🎤 Speech-to-text
+  // Speech-to-text
   late stt.SpeechToText _speech;
   bool _isListening = false;
+  bool _speechAvailable = false;
 
   @override
   void initState() {
     super.initState();
     _speech = stt.SpeechToText();
+    _initSpeech();
+  }
+
+  Future<void> _initSpeech() async {
+    _speechAvailable = await _speech.initialize(
+      onStatus: (status) {
+        debugPrint("Speech status: $status");
+      },
+      onError: (error) {
+        debugPrint("Speech error: $error");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Speech error: ${error.errorMsg}')),
+          );
+        }
+      },
+    );
+
+    if (!_speechAvailable && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Voice search is not available. Check microphone permission or device.'),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _speech.stop();
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _signOut(BuildContext context) async {
@@ -52,7 +86,8 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     if (_imageCache.containsKey(uid)) return _imageCache[uid];
 
     try {
-      if (doctor["profileImage"] != null && doctor["profileImage"].toString().isNotEmpty) {
+      if (doctor["profileImage"] != null &&
+          doctor["profileImage"].toString().isNotEmpty) {
         _imageCache[uid] = doctor["profileImage"];
         return doctor["profileImage"];
       }
@@ -62,25 +97,37 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
       _imageCache[uid] = url;
       return url;
     } catch (e) {
-      debugPrint("⚠️ Could not load image for $uid: $e");
+      debugPrint("Could not load image for $uid: $e");
       _imageCache[uid] = null;
       return null;
     }
   }
 
-  // 🎤 Start or stop listening
+  // Start or stop listening
   void _toggleVoiceSearch() async {
+    if (!_speechAvailable) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Speech recognition not available. Make sure mic permission is allowed.'),
+        ),
+      );
+      return;
+    }
+
     if (!_isListening) {
-      bool available = await _speech.initialize();
-      if (available) {
-        setState(() => _isListening = true);
-        _speech.listen(onResult: (result) {
+      setState(() => _isListening = true);
+
+      _speech.listen(
+        // You can set localeId if you want a specific language, e.g. 'en_US' or 'ar_SA'
+        // localeId: 'en_US',
+        onResult: (result) {
           setState(() {
             _searchController.text = result.recognizedWords;
             _searchQuery = result.recognizedWords.toLowerCase();
           });
-        });
-      }
+        },
+      );
     } else {
       setState(() => _isListening = false);
       _speech.stop();
@@ -98,7 +145,8 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Patient Dashboard', style: TextStyle(color: Colors.white)),
+        title:
+        const Text('Patient Dashboard', style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.purple,
         centerTitle: true,
         actions: [
@@ -109,7 +157,6 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
           ),
         ],
       ),
-
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -119,7 +166,8 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Welcome Patient', style: TextStyle(color: Colors.white, fontSize: 22)),
+                  Text('Welcome Patient',
+                      style: TextStyle(color: Colors.white, fontSize: 22)),
                   SizedBox(height: 8),
                   Text('Menu Options', style: TextStyle(color: Colors.white70)),
                 ],
@@ -129,60 +177,82 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
               leading: const Icon(Icons.person),
               title: const Text('Personal Profile'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const PatientProfilePage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PatientProfilePage()),
+                );
               },
             ),
             ListTile(
               leading: const Icon(Icons.smart_toy),
               title: const Text('AI Chatbot'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const AIChatbotPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AIChatbotPage()),
+                );
               },
             ),
             ListTile(
               leading: const Icon(Icons.medical_services),
               title: const Text('Medication Info'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const MedicationInfoPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MedicationInfoPage()),
+                );
               },
             ),
             ListTile(
               leading: const Icon(Icons.feedback),
               title: const Text('Send Feedback'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const SendFeedbackPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SendFeedbackPage()),
+                );
               },
             ),
             ListTile(
               leading: const Icon(Icons.warning_amber),
               title: const Text('Send Problem'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const SendProblemPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SendProblemPage()),
+                );
               },
             ),
             ListTile(
               leading: const Icon(Icons.calendar_month),
               title: const Text('Booked Appointments'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const BookedAppointmentsPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const BookedAppointmentsPage()),
+                );
               },
             ),
             ListTile(
               leading: const Icon(Icons.location_city),
               title: const Text('Location'),
               onTap: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const ClinicHospitalPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const ClinicHospitalPage()),
+                );
               },
             ),
           ],
         ),
       ),
-
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 🔎 Search + 🎤 Voice search
+            // Search + Voice search
             Row(
               children: [
                 Expanded(
@@ -210,7 +280,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
             ),
             const SizedBox(height: 16),
 
-            // 🩺 Doctor List
+            // Doctor List
             Expanded(
               child: StreamBuilder(
                 stream: doctorsRef.onValue,
@@ -223,26 +293,31 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                     return const Center(child: Text("Error loading doctors"));
                   }
 
-                  if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+                  if (!snapshot.hasData ||
+                      snapshot.data!.snapshot.value == null) {
                     return const Center(child: Text("No doctors found"));
                   }
 
                   final data = Map<String, dynamic>.from(
-                      (snapshot.data! as DatabaseEvent).snapshot.value as Map);
+                    (snapshot.data! as DatabaseEvent).snapshot.value as Map,
+                  );
 
-                  // ✅ Only hide doctor if explicitly disabled
+                  // Only hide doctor if explicitly disabled
                   final doctors = data.entries
-                      .map((e) => MapEntry(e.key, Map<String, dynamic>.from(e.value)))
+                      .map(
+                        (e) =>
+                        MapEntry(e.key, Map<String, dynamic>.from(e.value)),
+                  )
                       .where((entry) {
                     final doctor = entry.value;
                     final hasEnabled = doctor.containsKey("enabled");
                     final isDisabled = hasEnabled && doctor["enabled"] == false;
                     return !isDisabled && _matchesSearch(doctor);
-                  })
-                      .toList();
+                  }).toList();
 
                   if (doctors.isEmpty) {
-                    return const Center(child: Text("No doctors match your search."));
+                    return const Center(
+                        child: Text("No doctors match your search."));
                   }
 
                   return ListView.builder(
@@ -268,27 +343,41 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                 backgroundColor: Colors.purple.shade100,
                                 backgroundImage: imageUrl != null
                                     ? NetworkImage(imageUrl)
-                                    : const AssetImage("assets/images/doctor_placeholder.png") as ImageProvider,
+                                    : const AssetImage(
+                                    "assets/images/doctor_placeholder.png")
+                                as ImageProvider,
                               ),
-                              title: Text(doctor["fullName"] ?? "Unknown Doctor"),
-                              subtitle: Text(doctor["address"] ?? "Address not available"),
-                              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                              title: Text(
+                                  doctor["fullName"] ?? "Unknown Doctor"),
+                              subtitle: Text(doctor["address"] ??
+                                  "Address not available"),
+                              trailing:
+                              const Icon(Icons.arrow_forward_ios, size: 16),
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => DoctorDetailsPage(
-                                      doctorName: doctor["fullName"] ?? "",
-                                      description: doctor["description"] ?? "",
-                                      staffId: doctor["staffId"] ?? "",
-                                      address: doctor["address"] ?? "",
+                                      doctorName:
+                                      doctor["fullName"] ?? "",
+                                      description:
+                                      doctor["description"] ?? "",
+                                      staffId:
+                                      doctor["staffId"] ?? "",
+                                      address:
+                                      doctor["address"] ?? "",
                                       lat: doctor["location"]?["lat"] != null
-                                          ? double.tryParse(doctor["location"]["lat"].toString())
+                                          ? double.tryParse(doctor["location"]
+                                      ["lat"]
+                                          .toString())
                                           : null,
                                       lng: doctor["location"]?["lng"] != null
-                                          ? double.tryParse(doctor["location"]["lng"].toString())
+                                          ? double.tryParse(doctor["location"]
+                                      ["lng"]
+                                          .toString())
                                           : null,
-                                      specialization: doctor["specialization"] ?? "",
+                                      specialization:
+                                      doctor["specialization"] ?? "",
                                     ),
                                   ),
                                 );
