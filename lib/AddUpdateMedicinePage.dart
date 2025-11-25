@@ -22,6 +22,8 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
   FirebaseDatabase.instance.ref('appointments');
   final DatabaseReference _medicinesRef =
   FirebaseDatabase.instance.ref('medicines');
+  final DatabaseReference _notificationsRef =
+  FirebaseDatabase.instance.ref('patientNotifications');
 
   List<Map<String, dynamic>> _patients = [];
   List<Map<String, dynamic>> _medicineHistory = [];
@@ -84,6 +86,35 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
     });
   }
 
+  // 🔔 Notification writer
+  Future<void> _sendMedicineNotification({
+    required String patientEmail,
+    required String patientName,
+    required String doctorName,
+    required String medicineName,
+    required bool isUpdate,
+  }) async {
+    try {
+      final ref = _notificationsRef.push();
+      await ref.set({
+        'patientEmail': patientEmail,
+        'patientName': patientName,
+        'doctorName': doctorName,
+        'medicineName': medicineName,
+        'type': isUpdate ? 'medicine_updated' : 'medicine_added',
+        'title':
+        isUpdate ? 'Your medicine was updated' : 'New medicine added for you',
+        'body': isUpdate
+            ? 'Dr. $doctorName updated your medicine: $medicineName.'
+            : 'Dr. $doctorName added a new medicine: $medicineName.',
+        'createdAt': ServerValue.timestamp,
+        'read': false,
+      });
+    } catch (e) {
+      debugPrint('Notification error: $e');
+    }
+  }
+
   Future<void> _submitMedicineDetails() async {
     final name = _nameController.text.trim();
     final dosage = _dosageController.text.trim();
@@ -107,8 +138,12 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
       return;
     }
 
+    final patientEmail = _selectedPatient!['email'] as String;
+    final patientName = _selectedPatient!['name'] as String;
+    final doctorName = doctor.displayName ?? 'Your doctor';
+
     if (_editingMedicineId != null) {
-      print("Updating medicine with ID: $_editingMedicineId");
+      // UPDATE
       await _medicinesRef.child(_editingMedicineId!).update({
         'name': name,
         'dosage': dosage,
@@ -116,24 +151,42 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
         'durationType': _durationType,
         'timestamp': DateTime.now().toIso8601String(),
       });
+
+      await _sendMedicineNotification(
+        patientEmail: patientEmail,
+        patientName: patientName,
+        doctorName: doctorName,
+        medicineName: name,
+        isUpdate: true,
+      );
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Medicine updated successfully!')),
       );
       _editingMedicineId = null;
     } else {
+      // ADD NEW
       final newMedRef = _medicinesRef.push();
       await newMedRef.set({
         'medicineId': newMedRef.key,
         'doctorEmail': doctor.email,
         'doctorName': doctor.displayName ?? '',
-        'patientEmail': _selectedPatient!['email'],
-        'patientName': _selectedPatient!['name'],
+        'patientEmail': patientEmail,
+        'patientName': patientName,
         'name': name,
         'dosage': dosage,
         'duration': durationValue,
         'durationType': _durationType,
         'timestamp': DateTime.now().toIso8601String(),
       });
+
+      await _sendMedicineNotification(
+        patientEmail: patientEmail,
+        patientName: patientName,
+        doctorName: doctorName,
+        medicineName: name,
+        isUpdate: false,
+      );
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Medicine added successfully!')),
@@ -161,16 +214,24 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
   }
 
   void _editMedicine(Map<String, dynamic> med) {
+    final medPatientEmail = (med['patientEmail'] ?? '') as String;
+
+    // 🔎 try to find the exact patient object from _patients list
+    Map<String, dynamic>? matchedPatient;
+    try {
+      matchedPatient =
+          _patients.firstWhere((p) => p['email'] == medPatientEmail);
+    } catch (_) {
+      matchedPatient = null; // if not found, dropdown will show empty
+    }
+
     setState(() {
       _editingMedicineId = med['key'];
       _nameController.text = med['name'] ?? '';
       _dosageController.text = med['dosage'] ?? '';
       _durationController.text = med['duration'] ?? '';
       _durationType = med['durationType'] ?? 'Days';
-      _selectedPatient = {
-        'name': med['patientName'] ?? '',
-        'email': med['patientEmail'] ?? ''
-      };
+      _selectedPatient = matchedPatient;
     });
   }
 
@@ -187,6 +248,7 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            // Form card
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -202,13 +264,18 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
               ),
               child: Column(
                 children: [
+                  // 👩‍⚕️ Patient dropdown
                   DropdownButtonFormField<Map<String, dynamic>>(
-                    value: _selectedPatient,
+                    value: _patients
+                        .any((p) => identical(p, _selectedPatient))
+                        ? _selectedPatient
+                        : null,
                     decoration: InputDecoration(
                       labelText: 'Select Patient',
                       prefixIcon: const Icon(Icons.person),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     items: _patients.map((p) {
                       return DropdownMenuItem<Map<String, dynamic>>(
@@ -219,26 +286,34 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                     onChanged: (val) => setState(() => _selectedPatient = val),
                   ),
                   const SizedBox(height: 20),
+
+                  // Medicine name
                   TextField(
                     controller: _nameController,
                     decoration: InputDecoration(
                       labelText: 'Medicine Name',
                       prefixIcon: const Icon(Icons.medication),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // Dosage
                   TextField(
                     controller: _dosageController,
                     decoration: InputDecoration(
                       labelText: 'Dosage Instructions',
                       prefixIcon: const Icon(Icons.medical_information),
                       border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16),
+
+                  // Duration + unit
                   Row(
                     children: [
                       Expanded(
@@ -250,7 +325,8 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                             labelText: 'Duration',
                             prefixIcon: const Icon(Icons.timer),
                             border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
                       ),
@@ -262,23 +338,29 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                           decoration: InputDecoration(
                             labelText: 'Unit',
                             border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           items: const [
-                            DropdownMenuItem(value: 'Days', child: Text('Days')),
+                            DropdownMenuItem(
+                                value: 'Days', child: Text('Days')),
                             DropdownMenuItem(
                                 value: 'Weeks', child: Text('Weeks')),
                             DropdownMenuItem(
                                 value: 'Months', child: Text('Months')),
                           ],
                           onChanged: (val) {
-                            if (val != null) setState(() => _durationType = val);
+                            if (val != null) {
+                              setState(() => _durationType = val);
+                            }
                           },
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 24),
+
+                  // Submit / Update button
                   ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.purple,
@@ -286,11 +368,11 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 24, vertical: 12),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
-                    icon: Icon(_editingMedicineId == null
-                        ? Icons.save
-                        : Icons.update),
+                    icon: Icon(
+                        _editingMedicineId == null ? Icons.save : Icons.update),
                     label: Text(
                       _editingMedicineId == null ? 'Submit' : 'Update',
                       style: const TextStyle(fontSize: 16),
@@ -300,15 +382,21 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                 ],
               ),
             ),
+
             const SizedBox(height: 30),
+
+            // History title
             const Text(
               "Medicine History",
               style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.purple),
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.purple,
+              ),
             ),
             const SizedBox(height: 10),
+
+            // History list
             _medicineHistory.isEmpty
                 ? const Text("No medicines found.")
                 : ListView.builder(
@@ -320,31 +408,36 @@ class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 8),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   elevation: 4,
                   child: ListTile(
                     title: Text(
                       med['name'] ?? 'Unnamed Medicine',
                       style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.purple),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purple,
+                      ),
                     ),
                     subtitle: Text(
-                        "Patient: ${med['patientName']}\nDosage: ${med['dosage']}\nDuration: ${med['duration']} ${med['durationType']}"),
+                      "Patient: ${med['patientName']}\n"
+                          "Dosage: ${med['dosage']}\n"
+                          "Duration: ${med['duration']} ${med['durationType']}",
+                    ),
                     isThreeLine: true,
                     trailing: Wrap(
                       spacing: 8,
                       children: [
                         IconButton(
-                          icon:
-                          const Icon(Icons.edit, color: Colors.green),
+                          icon: const Icon(Icons.edit,
+                              color: Colors.green),
                           onPressed: () => _editMedicine(med),
                         ),
                         IconButton(
-                          icon:
-                          const Icon(Icons.delete, color: Colors.red),
+                          icon: const Icon(Icons.delete,
+                              color: Colors.red),
                           onPressed: () =>
-                              _deleteMedicine(med['key']),
+                              _deleteMedicine(med['key'] as String),
                         ),
                       ],
                     ),
