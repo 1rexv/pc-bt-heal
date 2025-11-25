@@ -1,453 +1,302 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 
-class AddUpdateMedicinePage extends StatefulWidget {
-  const AddUpdateMedicinePage({super.key});
+class AddOrUpdateDoctorPage extends StatefulWidget {
+  const AddOrUpdateDoctorPage({super.key});
 
   @override
-  State<AddUpdateMedicinePage> createState() => _AddUpdateMedicinePageState();
+  State<AddOrUpdateDoctorPage> createState() => _AddOrUpdateDoctorPageState();
 }
 
-class _AddUpdateMedicinePageState extends State<AddUpdateMedicinePage> {
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _dosageController = TextEditingController();
-  final TextEditingController _durationController = TextEditingController();
+class _AddOrUpdateDoctorPageState extends State<AddOrUpdateDoctorPage> {
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController fullNameController = TextEditingController();
+  final TextEditingController addressController = TextEditingController();
+  final TextEditingController staffIdController = TextEditingController();
+  final TextEditingController descriptionController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController(); //
 
-  String _durationType = 'Days';
-  Map<String, dynamic>? _selectedPatient;
-  String? _editingMedicineId;
+  bool _isLoading = false;
+  LatLng? _selectedLocation;
+  GoogleMapController? _mapController;
 
-  final DatabaseReference _appointmentsRef =
-  FirebaseDatabase.instance.ref('appointments');
-  final DatabaseReference _medicinesRef =
-  FirebaseDatabase.instance.ref('medicines');
-  final DatabaseReference _notificationsRef =
-  FirebaseDatabase.instance.ref('patientNotifications');
+  File? _profileImageFile;
+  String? _profileImageUrl;
 
-  List<Map<String, dynamic>> _patients = [];
-  List<Map<String, dynamic>> _medicineHistory = [];
+  File? _certificateFile;
+  String? _certificateUrl;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadPatients();
-    _loadMedicineHistory();
-  }
-
-  Future<void> _loadPatients() async {
-    final doctor = FirebaseAuth.instance.currentUser;
-    if (doctor == null) return;
-
-    final snapshot = await _appointmentsRef.get();
-    if (!snapshot.exists) return;
-
-    final data = Map<String, dynamic>.from(snapshot.value as Map);
-
-    final doctorAppointments = data.entries
-        .map((e) => Map<String, dynamic>.from(e.value))
-        .where((a) =>
-    (a['doctorEmail'] ?? '') == doctor.email &&
-        (a['status'] ?? '').toString().toLowerCase() == 'accepted')
-        .toList();
-
-    final Map<String, Map<String, dynamic>> uniquePatients = {};
-
-    for (var appointment in doctorAppointments) {
-      final email = (appointment['patientEmail'] ?? '').toString();
-      final name = (appointment['patientName'] ?? 'Unknown').toString();
-      uniquePatients[email] = {'email': email, 'name': name};
-    }
-
-    setState(() {
-      _patients = uniquePatients.values.toList();
-    });
-  }
-
-  Future<void> _loadMedicineHistory() async {
-    final doctor = FirebaseAuth.instance.currentUser;
-    if (doctor == null) return;
-
-    final snapshot = await _medicinesRef.get();
-    if (!snapshot.exists) return;
-
-    final data = Map<String, dynamic>.from(snapshot.value as Map);
-    final doctorMeds = data.entries
-        .map((e) {
-      final med = Map<String, dynamic>.from(e.value);
-      med['key'] = e.key;
-      return med;
-    })
-        .where((m) => (m['doctorEmail'] ?? '') == doctor.email)
-        .toList();
-
-    setState(() {
-      _medicineHistory = doctorMeds;
-    });
-  }
-
-  // 🔔 Notification writer
-  Future<void> _sendMedicineNotification({
-    required String patientEmail,
-    required String patientName,
-    required String doctorName,
-    required String medicineName,
-    required bool isUpdate,
-  }) async {
-    try {
-      final ref = _notificationsRef.push();
-      await ref.set({
-        'patientEmail': patientEmail,
-        'patientName': patientName,
-        'doctorName': doctorName,
-        'medicineName': medicineName,
-        'type': isUpdate ? 'medicine_updated' : 'medicine_added',
-        'title':
-        isUpdate ? 'Your medicine was updated' : 'New medicine added for you',
-        'body': isUpdate
-            ? 'Dr. $doctorName updated your medicine: $medicineName.'
-            : 'Dr. $doctorName added a new medicine: $medicineName.',
-        'createdAt': ServerValue.timestamp,
-        'read': false,
-      });
-    } catch (e) {
-      debugPrint('Notification error: $e');
-    }
-  }
-
-  Future<void> _submitMedicineDetails() async {
-    final name = _nameController.text.trim();
-    final dosage = _dosageController.text.trim();
-    final durationValue = _durationController.text.trim();
-
-    if (_selectedPatient == null ||
-        name.isEmpty ||
-        dosage.isEmpty ||
-        durationValue.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all required fields')),
-      );
-      return;
-    }
-
-    final doctor = FirebaseAuth.instance.currentUser;
-    if (doctor == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please login as doctor first')),
-      );
-      return;
-    }
-
-    final patientEmail = _selectedPatient!['email'] as String;
-    final patientName = _selectedPatient!['name'] as String;
-    final doctorName = doctor.displayName ?? 'Your doctor';
-
-    if (_editingMedicineId != null) {
-      // UPDATE
-      await _medicinesRef.child(_editingMedicineId!).update({
-        'name': name,
-        'dosage': dosage,
-        'duration': durationValue,
-        'durationType': _durationType,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-
-      await _sendMedicineNotification(
-        patientEmail: patientEmail,
-        patientName: patientName,
-        doctorName: doctorName,
-        medicineName: name,
-        isUpdate: true,
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Medicine updated successfully!')),
-      );
-      _editingMedicineId = null;
-    } else {
-      // ADD NEW
-      final newMedRef = _medicinesRef.push();
-      await newMedRef.set({
-        'medicineId': newMedRef.key,
-        'doctorEmail': doctor.email,
-        'doctorName': doctor.displayName ?? '',
-        'patientEmail': patientEmail,
-        'patientName': patientName,
-        'name': name,
-        'dosage': dosage,
-        'duration': durationValue,
-        'durationType': _durationType,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-
-      await _sendMedicineNotification(
-        patientEmail: patientEmail,
-        patientName: patientName,
-        doctorName: doctorName,
-        medicineName: name,
-        isUpdate: false,
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Medicine added successfully!')),
-      );
-    }
-
-    // Clear form
-    _nameController.clear();
-    _dosageController.clear();
-    _durationController.clear();
-    setState(() {
-      _durationType = 'Days';
-      _selectedPatient = null;
-    });
-
-    await _loadMedicineHistory();
-  }
-
-  Future<void> _deleteMedicine(String id) async {
-    await _medicinesRef.child(id).remove();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Medicine deleted successfully!')),
-    );
-    await _loadMedicineHistory();
-  }
-
-  void _editMedicine(Map<String, dynamic> med) {
-    final medPatientEmail = (med['patientEmail'] ?? '') as String;
-
-    // 🔎 try to find the exact patient object from _patients list
-    Map<String, dynamic>? matchedPatient;
-    try {
-      matchedPatient =
-          _patients.firstWhere((p) => p['email'] == medPatientEmail);
-    } catch (_) {
-      matchedPatient = null; // if not found, dropdown will show empty
-    }
-
-    setState(() {
-      _editingMedicineId = med['key'];
-      _nameController.text = med['name'] ?? '';
-      _dosageController.text = med['dosage'] ?? '';
-      _durationController.text = med['duration'] ?? '';
-      _durationType = med['durationType'] ?? 'Days';
-      _selectedPatient = matchedPatient;
-    });
-  }
+  final _auth = FirebaseAuth.instance;
+  final _db = FirebaseDatabase.instance.ref();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add / Update Medicine',
-            style: TextStyle(color: Colors.white)),
+        title: const Text("Doctor Registration", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.purple,
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Form card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ],
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+        padding: const EdgeInsets.all(20),
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            children: [
+              const SizedBox(height: 16),
+              _buildTextField(fullNameController, "Full Name", Icons.person),
+              const SizedBox(height: 16),
+              _buildTextField(emailController, "Email", Icons.email,
+                  inputType: TextInputType.emailAddress, validator: _emailValidator),
+              const SizedBox(height: 16),
+              _buildTextField(passwordController, "Password", Icons.lock,
+                  obscure: true, validator: _passwordValidator),
+              const SizedBox(height: 16),
+
+
+              _buildTextField(
+                phoneController,
+                "Phone Number",
+                Icons.phone,
+                inputType: TextInputType.phone,
+                validator: _phoneValidator,
               ),
-              child: Column(
-                children: [
-                  // 👩‍⚕️ Patient dropdown
-                  DropdownButtonFormField<Map<String, dynamic>>(
-                    value: _patients
-                        .any((p) => identical(p, _selectedPatient))
-                        ? _selectedPatient
-                        : null,
-                    decoration: InputDecoration(
-                      labelText: 'Select Patient',
-                      prefixIcon: const Icon(Icons.person),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    items: _patients.map((p) {
-                      return DropdownMenuItem<Map<String, dynamic>>(
-                        value: p,
-                        child: Text(p['name']),
-                      );
-                    }).toList(),
-                    onChanged: (val) => setState(() => _selectedPatient = val),
-                  ),
-                  const SizedBox(height: 20),
 
-                  // Medicine name
-                  TextField(
-                    controller: _nameController,
-                    decoration: InputDecoration(
-                      labelText: 'Medicine Name',
-                      prefixIcon: const Icon(Icons.medication),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Dosage
-                  TextField(
-                    controller: _dosageController,
-                    decoration: InputDecoration(
-                      labelText: 'Dosage Instructions',
-                      prefixIcon: const Icon(Icons.medical_information),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Duration + unit
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: TextField(
-                          controller: _durationController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: 'Duration',
-                            prefixIcon: const Icon(Icons.timer),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: DropdownButtonFormField<String>(
-                          value: _durationType,
-                          decoration: InputDecoration(
-                            labelText: 'Unit',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          items: const [
-                            DropdownMenuItem(
-                                value: 'Days', child: Text('Days')),
-                            DropdownMenuItem(
-                                value: 'Weeks', child: Text('Weeks')),
-                            DropdownMenuItem(
-                                value: 'Months', child: Text('Months')),
-                          ],
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _durationType = val);
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Submit / Update button
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    icon: Icon(
-                        _editingMedicineId == null ? Icons.save : Icons.update),
-                    label: Text(
-                      _editingMedicineId == null ? 'Submit' : 'Update',
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                    onPressed: _submitMedicineDetails,
-                  ),
-                ],
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.image, color: Colors.white),
+                label: const Text("Upload Profile Image", style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+                onPressed: _pickProfileImage,
               ),
-            ),
+              if (_profileImageFile != null)
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Image.file(_profileImageFile!, height: 100),
+                ),
 
-            const SizedBox(height: 30),
+              const SizedBox(height: 16),
+              _buildTextField(addressController, "Address", Icons.location_on),
+              const SizedBox(height: 16),
 
-            // History title
-            const Text(
-              "Medicine History",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.purple,
+              _buildTextField(staffIdController, "Staff ID", Icons.badge),
+              const SizedBox(height: 16),
+
+              _buildTextField(descriptionController, "Doctor Description", Icons.description, maxLines: 4),
+              const SizedBox(height: 24),
+
+              const Text("Doctor Location",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 200,
+                child: GoogleMap(
+                  initialCameraPosition: const CameraPosition(
+                    target: LatLng(23.5859, 58.4059),
+                    zoom: 7,
+                  ),
+                  onMapCreated: (controller) => _mapController = controller,
+                  onTap: (LatLng position) {
+                    setState(() => _selectedLocation = position);
+                  },
+                  markers: _selectedLocation != null
+                      ? {
+                    Marker(
+                      markerId: const MarkerId("selected-location"),
+                      position: _selectedLocation!,
+                    ),
+                  }
+                      : {},
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
+              const SizedBox(height: 16),
 
-            // History list
-            _medicineHistory.isEmpty
-                ? const Text("No medicines found.")
-                : ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _medicineHistory.length,
-              itemBuilder: (context, index) {
-                final med = _medicineHistory[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 4,
-                  child: ListTile(
-                    title: Text(
-                      med['name'] ?? 'Unnamed Medicine',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.purple,
-                      ),
-                    ),
-                    subtitle: Text(
-                      "Patient: ${med['patientName']}\n"
-                          "Dosage: ${med['dosage']}\n"
-                          "Duration: ${med['duration']} ${med['durationType']}",
-                    ),
-                    isThreeLine: true,
-                    trailing: Wrap(
-                      spacing: 8,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit,
-                              color: Colors.green),
-                          onPressed: () => _editMedicine(med),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete,
-                              color: Colors.red),
-                          onPressed: () =>
-                              _deleteMedicine(med['key'] as String),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
+              ElevatedButton.icon(
+                icon: const Icon(Icons.upload_file, color: Colors.white),
+                label: const Text("Upload Certificate", style: TextStyle(color: Colors.white)),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
+                onPressed: _pickCertificate,
+              ),
+              if (_certificateFile != null)
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text("Selected: ${_certificateFile!.path.split('/').last}"),
+                ),
+              const SizedBox(height: 16),
+
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: _submitForm,
+                child: const Text("Submit",
+                    style: TextStyle(color: Colors.white, fontSize: 16)),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+  String? _phoneValidator(String? value) {
+    if (value == null || value.isEmpty) {
+      return "Enter phone number";
+    }
+
+    final RegExp phoneRegex = RegExp(r'^[89][0-9]{7}$');
+    if (!phoneRegex.hasMatch(value)) {
+      return "Phone must be 8 digits and start with 9 or 8";
+    }
+    return null;
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon,
+      {bool obscure = false,
+        int maxLines = 1,
+        TextInputType inputType = TextInputType.text,
+        String? Function(String?)? validator}) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscure,
+      maxLines: maxLines,
+      keyboardType: inputType,
+      decoration: InputDecoration(
+        labelText: label,
+        border: const OutlineInputBorder(),
+        prefixIcon: Icon(icon),
+      ),
+      validator: validator ?? (value) => value == null || value.isEmpty ? "Enter $label" : null,
+    );
+  }
+
+  String? _emailValidator(String? value) {
+    if (value == null || value.isEmpty) return "Enter email";
+    if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) return "Enter valid email";
+    return null;
+  }
+
+  String? _passwordValidator(String? value) {
+    if (value == null || value.length < 6) return "Password must be at least 6 characters";
+    return null;
+  }
+
+  Future<void> _pickProfileImage() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked != null) {
+      setState(() => _profileImageFile = File(picked.path));
+    }
+  }
+
+  Future<void> _pickCertificate() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        setState(() {
+          _certificateFile = File(result.files.single.path!);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Selected: ${result.files.single.name}")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("No file selected")),
+        );
+      }
+    } catch (e) {
+      debugPrint("File pick error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error picking file: $e")),
+      );
+    }
+  }
+
+  Future<String?> _uploadFile(File file, String path) async {
+    try {
+      final ref = FirebaseStorage.instance.ref().child(path);
+      await ref.putFile(file);
+      final url = await ref.getDownloadURL();
+      return url;
+    } catch (e) {
+      debugPrint("Upload error: $e");
+      return null;
+    }
+  }
+
+  Future<void> _submitForm() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+
+      try {
+        final userCredential = await _auth.createUserWithEmailAndPassword(
+          email: emailController.text.trim(),
+          password: passwordController.text.trim(),
+        );
+
+        final uid = userCredential.user!.uid;
+
+
+        if (_profileImageFile != null) {
+          _profileImageUrl = await _uploadFile(_profileImageFile!, "doctors/$uid/profile.jpg");
+        }
+
+        if (_certificateFile != null) {
+          final ext = _certificateFile!.path.split('.').last;
+          _certificateUrl = await _uploadFile(_certificateFile!, "doctors/$uid/certificate.$ext");
+        }
+
+
+        await _db.child("doctors").child(uid).set({
+          "fullName": fullNameController.text.trim(),
+          "email": emailController.text.trim(),
+          "phone": phoneController.text.trim(), //
+          "address": addressController.text.trim(),
+          "staffId": staffIdController.text.trim(),
+          "certificates": _certificateUrl ?? "",
+          "description": descriptionController.text.trim(),
+          "location": _selectedLocation != null
+              ? {
+            "lat": _selectedLocation!.latitude,
+            "lng": _selectedLocation!.longitude,
+          }
+              : null,
+          "profileImage": _profileImageUrl ?? "",
+          "userType": "Doctor",
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Doctor registered successfully!")),
+        );
+
+        _formKey.currentState!.reset();
+        setState(() {
+          _selectedLocation = null;
+          _profileImageFile = null;
+          _certificateFile = null;
+        });
+      } on FirebaseAuthException catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: ${e.message}")),
+        );
+      } finally {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 }
