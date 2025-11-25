@@ -5,6 +5,7 @@ import 'AddOrUpdateDoctorPage.dart';
 import 'EnableDisableDoctorPage.dart';
 import 'ViewFeedbackPage.dart';
 import 'TrackProgressPage.dart';
+import 'AdminViweDoctorDetails.dart';
 
 
 class AdminDashboardPage extends StatelessWidget {
@@ -65,6 +66,17 @@ class AdminDashboardPage extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const ViewFeedbackPage()),
+                );
+              },
+            ),
+            _buildOption(
+              context,
+              icon: Icons.list,
+              title: 'View Doctors',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminDoctorListPage()),
                 );
               },
             ),
