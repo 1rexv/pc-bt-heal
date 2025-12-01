@@ -24,7 +24,7 @@ class PatientDashboardPage extends StatefulWidget {
 
 class _PatientDashboardPageState extends State<PatientDashboardPage> {
   final DatabaseReference doctorsRef =
-      FirebaseDatabase.instance.ref().child("doctors");
+  FirebaseDatabase.instance.ref().child("doctors");
 
   final Map<String, String?> _imageCache = {};
   final TextEditingController _searchController = TextEditingController();
@@ -47,7 +47,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const PatientLoginPage()),
-      (route) => false,
+          (route) => false,
     );
   }
 
@@ -55,17 +55,14 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     if (_imageCache.containsKey(uid)) return _imageCache[uid];
 
     try {
-      // If profileImage exists in DB
       if (doctor["profileImage"] != null &&
           doctor["profileImage"].toString().isNotEmpty) {
         _imageCache[uid] = doctor["profileImage"];
         return doctor["profileImage"];
       }
 
-      // Otherwise load from Firebase Storage
       final ref = FirebaseStorage.instance.ref("doctors/$uid/profile.jpg");
       final url = await ref.getDownloadURL();
-
       _imageCache[uid] = url;
       return url;
     } catch (e) {
@@ -75,7 +72,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     }
   }
 
-  // 🎙️ Voice Search
+  // 🎤 Voice Search
   Future<void> _toggleVoiceSearch() async {
     if (_isListening) {
       await _speech.stop();
@@ -92,8 +89,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content:
-                  Text("Voice search not available. Check mic permissions.")),
+              content: Text("Voice search not available. Check mic permissions.")),
         );
       }
       return;
@@ -107,12 +103,12 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
       partialResults: true,
       cancelOnError: true,
       onResult: (result) {
-        final text = result.recognizedWords;
+        final recognized = result.recognizedWords;
 
-        if (text.isNotEmpty) {
+        if (recognized.isNotEmpty) {
           setState(() {
-            _searchController.text = text;
-            _searchQuery = text.toLowerCase();
+            _searchController.text = recognized;
+            _searchQuery = recognized.toLowerCase();
           });
         }
 
@@ -138,7 +134,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     return Scaffold(
       appBar: AppBar(
         title:
-            const Text("Patient Dashboard", style: TextStyle(color: Colors.white)),
+        const Text("Patient Dashboard", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.purple,
         centerTitle: true,
         actions: [
@@ -150,7 +146,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
         ],
       ),
 
-      // ⭐ Drawer Menu (Merged)
+      // ⭐ Drawer Menu (View Tutorial at TOP)
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -166,6 +162,16 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                   Text("Menu Options",
                       style: TextStyle(color: Colors.white70)),
                 ],
+              ),
+            ),
+
+            // ⭐ FIRST ITEM
+            ListTile(
+              leading: const Icon(Icons.school),
+              title: const Text("View Tutorial"),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PatientTutorialPage()),
               ),
             ),
 
@@ -231,16 +237,6 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                 MaterialPageRoute(builder: (_) => const ClinicHospitalPage()),
               ),
             ),
-
-            // ⭐ Add Tutorial Back to Drawer
-            ListTile(
-              leading: const Icon(Icons.school),
-              title: const Text("View Tutorial"),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PatientTutorialPage()),
-              ),
-            ),
           ],
         ),
       ),
@@ -250,7 +246,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 🔍 Search + 🎙 Mic
+            // 🔍 Search + 🎤 Mic
             Row(
               children: [
                 Expanded(
@@ -302,7 +298,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
 
                   final doctors = data.entries
                       .map((e) =>
-                          MapEntry(e.key, Map<String, dynamic>.from(e.value)))
+                      MapEntry(e.key, Map<String, dynamic>.from(e.value)))
                       .where((entry) {
                     final doctor = entry.value;
                     final isDisabled =
@@ -339,7 +335,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                 backgroundImage: imageUrl != null
                                     ? NetworkImage(imageUrl)
                                     : const AssetImage("images/doctor_placeholder.png")
-                                        as ImageProvider,
+                                as ImageProvider,
                               ),
                               title: Text(doctor["fullName"] ?? "Unknown Doctor"),
                               subtitle: Text(
@@ -351,19 +347,22 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                   MaterialPageRoute(
                                     builder: (_) => DoctorDetailsPage(
                                       doctorName: doctor["fullName"] ?? "",
-                                      description: doctor["description"] ?? "",
+                                      description:
+                                      doctor["description"] ?? "",
                                       staffId: doctor["staffId"] ?? "",
                                       address: doctor["address"] ?? "",
                                       lat: doctor["location"]?["lat"] != null
                                           ? double.tryParse(
-                                              doctor["location"]["lat"].toString())
+                                          doctor["location"]["lat"]
+                                              .toString())
                                           : null,
                                       lng: doctor["location"]?["lng"] != null
                                           ? double.tryParse(
-                                              doctor["location"]["lng"].toString())
+                                          doctor["location"]["lng"]
+                                              .toString())
                                           : null,
                                       specialization:
-                                          doctor["specialization"] ?? "",
+                                      doctor["specialization"] ?? "",
                                     ),
                                   ),
                                 );
