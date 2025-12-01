@@ -24,7 +24,7 @@ class PatientDashboardPage extends StatefulWidget {
 
 class _PatientDashboardPageState extends State<PatientDashboardPage> {
   final DatabaseReference doctorsRef =
-  FirebaseDatabase.instance.ref().child("doctors");
+      FirebaseDatabase.instance.ref().child("doctors");
 
   final Map<String, String?> _imageCache = {};
   final TextEditingController _searchController = TextEditingController();
@@ -47,7 +47,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const PatientLoginPage()),
-          (route) => false,
+      (route) => false,
     );
   }
 
@@ -134,7 +134,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     return Scaffold(
       appBar: AppBar(
         title:
-        const Text("Patient Dashboard", style: TextStyle(color: Colors.white)),
+            const Text("Patient Dashboard", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.purple,
         centerTitle: true,
         actions: [
@@ -298,7 +298,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
 
                   final doctors = data.entries
                       .map((e) =>
-                      MapEntry(e.key, Map<String, dynamic>.from(e.value)))
+                          MapEntry(e.key, Map<String, dynamic>.from(e.value)))
                       .where((entry) {
                     final doctor = entry.value;
                     final isDisabled =
@@ -335,7 +335,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                 backgroundImage: imageUrl != null
                                     ? NetworkImage(imageUrl)
                                     : const AssetImage("images/doctor_placeholder.png")
-                                as ImageProvider,
+                                        as ImageProvider,
                               ),
                               title: Text(doctor["fullName"] ?? "Unknown Doctor"),
                               subtitle: Text(
@@ -348,21 +348,21 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                     builder: (_) => DoctorDetailsPage(
                                       doctorName: doctor["fullName"] ?? "",
                                       description:
-                                      doctor["description"] ?? "",
+                                          doctor["description"] ?? "",
                                       staffId: doctor["staffId"] ?? "",
                                       address: doctor["address"] ?? "",
                                       lat: doctor["location"]?["lat"] != null
                                           ? double.tryParse(
-                                          doctor["location"]["lat"]
-                                              .toString())
+                                              doctor["location"]["lat"]
+                                                  .toString())
                                           : null,
                                       lng: doctor["location"]?["lng"] != null
                                           ? double.tryParse(
-                                          doctor["location"]["lng"]
-                                              .toString())
+                                              doctor["location"]["lng"]
+                                                  .toString())
                                           : null,
                                       specialization:
-                                      doctor["specialization"] ?? "",
+                                          doctor["specialization"] ?? "",
                                     ),
                                   ),
                                 );
