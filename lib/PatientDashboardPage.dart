@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-
 import 'PatientLoginPage.dart';
 import 'DoctorDetailsPage.dart';
 import 'PatientProfilePage.dart';
@@ -29,42 +28,9 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
 
-  // Speech-to-text
-  late stt.SpeechToText _speech;
+  // 🎙️ Speech-to-text
+  final stt.SpeechToText _speech = stt.SpeechToText();
   bool _isListening = false;
-  bool _speechAvailable = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _speech = stt.SpeechToText();
-    _initSpeech();
-  }
-
-  Future<void> _initSpeech() async {
-    _speechAvailable = await _speech.initialize(
-      onStatus: (status) {
-        debugPrint("Speech status: $status");
-      },
-      onError: (error) {
-        debugPrint("Speech error: $error");
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Speech error: ${error.errorMsg}')),
-          );
-        }
-      },
-    );
-
-    if (!_speechAvailable && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Voice search is not available. Check microphone permission or device.'),
-        ),
-      );
-    }
-  }
 
   @override
   void dispose() {
@@ -82,7 +48,8 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     );
   }
 
-  Future<String?> _getDoctorImage(String uid, Map<String, dynamic> doctor) async {
+  Future<String?> _getDoctorImage(
+      String uid, Map<String, dynamic> doctor) async {
     if (_imageCache.containsKey(uid)) return _imageCache[uid];
 
     try {
@@ -103,35 +70,68 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     }
   }
 
-  // Start or stop listening
-  void _toggleVoiceSearch() async {
-    if (!_speechAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-              'Speech recognition not available. Make sure mic permission is allowed.'),
-        ),
-      );
+  Future<void> _toggleVoiceSearch() async {
+    if (_isListening) {
+      await _speech.stop();
+      setState(() => _isListening = false);
+      debugPrint("Stopped listening");
       return;
     }
 
-    if (!_isListening) {
-      setState(() => _isListening = true);
+    bool available = await _speech.initialize(
+      onStatus: (status) {
+        debugPrint("Speech status: $status");
+      },
+      onError: (error) {
+        debugPrint("Speech error: ${error.errorMsg}");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Speech error: ${error.errorMsg}')),
+          );
+        }
+      },
+    );
 
-      _speech.listen(
-        // You can set localeId if you want a specific language, e.g. 'en_US' or 'ar_SA'
-        // localeId: 'en_US',
-        onResult: (result) {
-          setState(() {
-            _searchController.text = result.recognizedWords;
-            _searchQuery = result.recognizedWords.toLowerCase();
-          });
-        },
-      );
-    } else {
-      setState(() => _isListening = false);
-      _speech.stop();
+    debugPrint("Speech available: $available");
+
+    if (!available) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Voice search not available. Check microphone permission or device.',
+            ),
+          ),
+        );
+      }
+      return;
     }
+
+    setState(() => _isListening = true);
+
+    await _speech.listen(
+      listenFor: const Duration(seconds: 8),
+      pauseFor: const Duration(seconds: 3),
+      partialResults: true,
+      cancelOnError: true,
+      onResult: (result) {
+        final recognizedText = result.recognizedWords;
+        debugPrint("Recognized text: $recognizedText");
+
+        if (recognizedText.isNotEmpty) {
+          setState(() {
+            _searchController.text = recognizedText;
+            _searchQuery = recognizedText.toLowerCase();
+          });
+        }
+
+        if (result.finalResult) {
+          debugPrint("Final result received, stopping listening");
+          _speech.stop();
+          setState(() => _isListening = false);
+        }
+      },
+    );
   }
 
   bool _matchesSearch(Map<String, dynamic> doctor) {
@@ -169,7 +169,8 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                   Text('Welcome Patient',
                       style: TextStyle(color: Colors.white, fontSize: 22)),
                   SizedBox(height: 8),
-                  Text('Menu Options', style: TextStyle(color: Colors.white70)),
+                  Text('Menu Options',
+                      style: TextStyle(color: Colors.white70)),
                 ],
               ),
             ),
@@ -252,7 +253,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Search + Voice search
+            // 🔍 Search + 🎙️ Voice search
             Row(
               children: [
                 Expanded(
@@ -302,7 +303,6 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                     (snapshot.data! as DatabaseEvent).snapshot.value as Map,
                   );
 
-                  // Only hide doctor if explicitly disabled
                   final doctors = data.entries
                       .map(
                         (e) =>
@@ -311,13 +311,15 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                       .where((entry) {
                     final doctor = entry.value;
                     final hasEnabled = doctor.containsKey("enabled");
-                    final isDisabled = hasEnabled && doctor["enabled"] == false;
+                    final isDisabled =
+                        hasEnabled && doctor["enabled"] == false;
                     return !isDisabled && _matchesSearch(doctor);
                   }).toList();
 
                   if (doctors.isEmpty) {
                     return const Center(
-                        child: Text("No doctors match your search."));
+                      child: Text("No doctors match your search."),
+                    );
                   }
 
                   return ListView.builder(
@@ -347,34 +349,35 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                     "assets/images/doctor_placeholder.png")
                                 as ImageProvider,
                               ),
-                              title: Text(
-                                  doctor["fullName"] ?? "Unknown Doctor"),
-                              subtitle: Text(doctor["address"] ??
-                                  "Address not available"),
-                              trailing:
-                              const Icon(Icons.arrow_forward_ios, size: 16),
+                              title:
+                              Text(doctor["fullName"] ?? "Unknown Doctor"),
+                              subtitle: Text(
+                                  doctor["address"] ?? "Address not available"),
+                              trailing: const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                              ),
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => DoctorDetailsPage(
-                                      doctorName:
-                                      doctor["fullName"] ?? "",
+                                      doctorName: doctor["fullName"] ?? "",
                                       description:
                                       doctor["description"] ?? "",
-                                      staffId:
-                                      doctor["staffId"] ?? "",
-                                      address:
-                                      doctor["address"] ?? "",
+                                      staffId: doctor["staffId"] ?? "",
+                                      address: doctor["address"] ?? "",
                                       lat: doctor["location"]?["lat"] != null
-                                          ? double.tryParse(doctor["location"]
-                                      ["lat"]
-                                          .toString())
+                                          ? double.tryParse(
+                                        doctor["location"]["lat"]
+                                            .toString(),
+                                      )
                                           : null,
                                       lng: doctor["location"]?["lng"] != null
-                                          ? double.tryParse(doctor["location"]
-                                      ["lng"]
-                                          .toString())
+                                          ? double.tryParse(
+                                        doctor["location"]["lng"]
+                                            .toString(),
+                                      )
                                           : null,
                                       specialization:
                                       doctor["specialization"] ?? "",
