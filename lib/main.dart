@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+// Your pages
 import 'DoctorLoginPage.dart';
 import 'AdminLoginPage.dart';
 import 'PatientLoginPage.dart';
 import 'ContactUsPage.dart';
+import 'patient_tutorial.dart';
+import 'PatientDashboardPage.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
@@ -18,6 +24,7 @@ void main() async {
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   final messaging = FirebaseMessaging.instance;
+
   final settings = await messaging.requestPermission(
     alert: true,
     badge: true,
@@ -43,6 +50,9 @@ class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.light;
   String _language = 'English';
 
+  static final GlobalKey<NavigatorState> navigatorKey =
+  GlobalKey<NavigatorState>();
+
   @override
   void initState() {
     super.initState();
@@ -63,8 +73,17 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  static final GlobalKey<NavigatorState> navigatorKey =
-  GlobalKey<NavigatorState>();
+  // 🔥 Per-patient tutorial check
+  Future<bool> _checkTutorial() async {
+    final prefs = await SharedPreferences.getInstance();
+    final user = FirebaseAuth.instance.currentUser;
+
+    // No logged-in patient yet → show tutorial when we take them to dashboard
+    if (user == null) return false;
+
+    final key = "tutorial_completed_${user.uid}";
+    return prefs.getBool(key) ?? false;
+  }
 
   void _toggleTheme(bool isDarkMode) {
     setState(() {
@@ -87,26 +106,59 @@ class _MyAppState extends State<MyApp> {
       debugShowCheckedModeBanner: false,
       title: 'Heal System',
       themeMode: _themeMode,
-      theme: ThemeData.from(
+      theme: ThemeData(
+        useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.deepPurple,
           brightness: Brightness.light,
         ),
-        useMaterial3: true,
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: Colors.black87),
+        ),
       ),
-      darkTheme: ThemeData.from(
+      darkTheme: ThemeData(
+        useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.deepPurple,
           brightness: Brightness.dark,
         ),
-        useMaterial3: true,
       ),
-      home: HealSystem(
-        title: 'Heal System',
-        onThemeChanged: _toggleTheme,
-        onLanguageChanged: _changeLanguage,
-        currentLanguage: _language,
-        isDarkMode: _themeMode == ThemeMode.dark,
+
+      // 👇 Decide based on login + tutorial
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, authSnap) {
+          // Not logged in → main HealSystem (start screen)
+          if (!authSnap.hasData) {
+            return HealSystem(
+              title: 'Heal System',
+              onThemeChanged: _toggleTheme,
+              onLanguageChanged: _changeLanguage,
+              currentLanguage: _language,
+              isDarkMode: _themeMode == ThemeMode.dark,
+            );
+          }
+
+          // Logged in (patient) → check tutorial per patient
+          return FutureBuilder<bool>(
+            future: _checkTutorial(),
+            builder: (context, tutSnap) {
+              if (!tutSnap.hasData) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final completed = tutSnap.data ?? false;
+
+              if (!completed) {
+                return const PatientTutorialPage();
+              }
+
+              return const PatientDashboardPage();
+            },
+          );
+        },
       ),
     );
   }
@@ -146,7 +198,13 @@ class _HealSystemState extends State<HealSystem> {
           padding: EdgeInsets.zero,
           children: [
             const DrawerHeader(
-              decoration: BoxDecoration(color: Colors.purple),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF8A2BE2), Color(0xFFD8B7FF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -162,7 +220,6 @@ class _HealSystemState extends State<HealSystem> {
               leading: const Icon(Icons.medical_services),
               title: const Text('Doctor Login'),
               onTap: () {
-                Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const DoctorLoginPage()),
@@ -173,7 +230,6 @@ class _HealSystemState extends State<HealSystem> {
               leading: const Icon(Icons.admin_panel_settings),
               title: const Text('Admin Login'),
               onTap: () {
-                Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AdminLoginPage()),
@@ -184,7 +240,6 @@ class _HealSystemState extends State<HealSystem> {
               leading: const Icon(Icons.contact_page),
               title: const Text('Contact Us'),
               onTap: () {
-                Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const ContactUsPage()),
@@ -217,28 +272,47 @@ class _HealSystemState extends State<HealSystem> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const ClipRRect(
-                borderRadius: BorderRadius.all(Radius.circular(12)),
-                child: Image(
-                  image: AssetImage('images/logo.png'),
-                  height: 120,
-                  width: 120,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF8A2BE2), Color(0xFFFFB6C1)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.purple.withOpacity(0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(8),
+                child: const ClipRRect(
+                  borderRadius: BorderRadius.all(Radius.circular(90)),
+                  child: Image(
+                    image: AssetImage('images/logo.png'),
+                    height: 120,
+                    width: 120,
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
               const Text(
                 "Welcome to Heal System",
                 style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.purple),
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF8A2BE2),
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 16.0),
                 child: Text(
-                  "Empowering your health and well-being journey. We're here for every woman, every step of the way.",
+                  "A caring space for every woman and every pregnancy journey. Track health, connect with doctors, and feel supported every step of the way.",
                   style: TextStyle(fontSize: 16, color: Colors.black87),
                   textAlign: TextAlign.center,
                 ),
@@ -246,9 +320,9 @@ class _HealSystemState extends State<HealSystem> {
               const SizedBox(height: 24),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.purple,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 32, vertical: 14),
+                  backgroundColor: const Color(0xFF8A2BE2),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30)),
                 ),
@@ -258,8 +332,10 @@ class _HealSystemState extends State<HealSystem> {
                     MaterialPageRoute(builder: (_) => const PatientLoginPage()),
                   );
                 },
-                child: const Text("Get Started",
-                    style: TextStyle(color: Colors.white, fontSize: 16)),
+                child: const Text(
+                  "Get Started",
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
               ),
             ],
           ),
