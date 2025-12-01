@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+
 import 'PatientLoginPage.dart';
 import 'DoctorDetailsPage.dart';
 import 'PatientProfilePage.dart';
@@ -12,6 +13,7 @@ import 'SendFeedbackPage.dart';
 import 'SendProblemPage.dart';
 import 'BookedAppointmentsPage.dart';
 import 'ClinicHospitalPage.dart';
+import 'patient_tutorial.dart';
 
 class PatientDashboardPage extends StatefulWidget {
   const PatientDashboardPage({super.key});
@@ -22,10 +24,11 @@ class PatientDashboardPage extends StatefulWidget {
 
 class _PatientDashboardPageState extends State<PatientDashboardPage> {
   final DatabaseReference doctorsRef =
-  FirebaseDatabase.instance.ref().child("doctors");
-  final Map<String, String?> _imageCache = {};
+      FirebaseDatabase.instance.ref().child("doctors");
 
+  final Map<String, String?> _imageCache = {};
   final TextEditingController _searchController = TextEditingController();
+
   String _searchQuery = "";
 
   // 🎙️ Speech-to-text
@@ -44,23 +47,25 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const PatientLoginPage()),
-          (route) => false,
+      (route) => false,
     );
   }
 
-  Future<String?> _getDoctorImage(
-      String uid, Map<String, dynamic> doctor) async {
+  Future<String?> _getDoctorImage(String uid, Map<String, dynamic> doctor) async {
     if (_imageCache.containsKey(uid)) return _imageCache[uid];
 
     try {
+      // If profileImage exists in DB
       if (doctor["profileImage"] != null &&
           doctor["profileImage"].toString().isNotEmpty) {
         _imageCache[uid] = doctor["profileImage"];
         return doctor["profileImage"];
       }
 
+      // Otherwise load from Firebase Storage
       final ref = FirebaseStorage.instance.ref("doctors/$uid/profile.jpg");
       final url = await ref.getDownloadURL();
+
       _imageCache[uid] = url;
       return url;
     } catch (e) {
@@ -70,38 +75,25 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     }
   }
 
+  // 🎙️ Voice Search
   Future<void> _toggleVoiceSearch() async {
     if (_isListening) {
       await _speech.stop();
       setState(() => _isListening = false);
-      debugPrint("Stopped listening");
       return;
     }
 
     bool available = await _speech.initialize(
-      onStatus: (status) {
-        debugPrint("Speech status: $status");
-      },
-      onError: (error) {
-        debugPrint("Speech error: ${error.errorMsg}");
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Speech error: ${error.errorMsg}')),
-          );
-        }
-      },
+      onStatus: (status) => debugPrint("Status: $status"),
+      onError: (error) => debugPrint("Speech error: ${error.errorMsg}"),
     );
-
-    debugPrint("Speech available: $available");
 
     if (!available) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Voice search not available. Check microphone permission or device.',
-            ),
-          ),
+              content:
+                  Text("Voice search not available. Check mic permissions.")),
         );
       }
       return;
@@ -115,18 +107,16 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
       partialResults: true,
       cancelOnError: true,
       onResult: (result) {
-        final recognizedText = result.recognizedWords;
-        debugPrint("Recognized text: $recognizedText");
+        final text = result.recognizedWords;
 
-        if (recognizedText.isNotEmpty) {
+        if (text.isNotEmpty) {
           setState(() {
-            _searchController.text = recognizedText;
-            _searchQuery = recognizedText.toLowerCase();
+            _searchController.text = text;
+            _searchQuery = text.toLowerCase();
           });
         }
 
         if (result.finalResult) {
-          debugPrint("Final result received, stopping listening");
           _speech.stop();
           setState(() => _isListening = false);
         }
@@ -136,8 +126,10 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
 
   bool _matchesSearch(Map<String, dynamic> doctor) {
     if (_searchQuery.isEmpty) return true;
+
     final name = (doctor["fullName"] ?? "").toString().toLowerCase();
     final address = (doctor["address"] ?? "").toString().toLowerCase();
+
     return name.contains(_searchQuery) || address.contains(_searchQuery);
   }
 
@@ -146,17 +138,19 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     return Scaffold(
       appBar: AppBar(
         title:
-        const Text('Patient Dashboard', style: TextStyle(color: Colors.white)),
+            const Text("Patient Dashboard", style: TextStyle(color: Colors.white)),
         backgroundColor: Colors.purple,
         centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: 'Sign Out',
+            tooltip: "Sign Out",
             onPressed: () => _signOut(context),
           ),
         ],
       ),
+
+      // ⭐ Drawer Menu (Merged)
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -166,107 +160,109 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Welcome Patient',
+                  Text("Welcome Patient",
                       style: TextStyle(color: Colors.white, fontSize: 22)),
                   SizedBox(height: 8),
-                  Text('Menu Options',
+                  Text("Menu Options",
                       style: TextStyle(color: Colors.white70)),
                 ],
               ),
             ),
+
             ListTile(
               leading: const Icon(Icons.person),
-              title: const Text('Personal Profile'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PatientProfilePage()),
-                );
-              },
+              title: const Text("Personal Profile"),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PatientProfilePage()),
+              ),
             ),
+
             ListTile(
               leading: const Icon(Icons.smart_toy),
-              title: const Text('AI Chatbot'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AIChatbotPage()),
-                );
-              },
+              title: const Text("AI Chatbot"),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AIChatbotPage()),
+              ),
             ),
+
             ListTile(
               leading: const Icon(Icons.medical_services),
-              title: const Text('Medication Info'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const MedicationInfoPage()),
-                );
-              },
+              title: const Text("Medication Info"),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MedicationInfoPage()),
+              ),
             ),
+
             ListTile(
               leading: const Icon(Icons.feedback),
-              title: const Text('Send Feedback'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SendFeedbackPage()),
-                );
-              },
+              title: const Text("Send Feedback"),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SendFeedbackPage()),
+              ),
             ),
+
             ListTile(
               leading: const Icon(Icons.warning_amber),
-              title: const Text('Send Problem'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SendProblemPage()),
-                );
-              },
+              title: const Text("Send Problem"),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SendProblemPage()),
+              ),
             ),
+
             ListTile(
               leading: const Icon(Icons.calendar_month),
-              title: const Text('Booked Appointments'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const BookedAppointmentsPage()),
-                );
-              },
+              title: const Text("Booked Appointments"),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const BookedAppointmentsPage()),
+              ),
             ),
+
             ListTile(
               leading: const Icon(Icons.location_city),
-              title: const Text('Location'),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (_) => const ClinicHospitalPage()),
-                );
-              },
+              title: const Text("Location"),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ClinicHospitalPage()),
+              ),
+            ),
+
+            // ⭐ Add Tutorial Back to Drawer
+            ListTile(
+              leading: const Icon(Icons.school),
+              title: const Text("View Tutorial"),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PatientTutorialPage()),
+              ),
             ),
           ],
         ),
       ),
+
+      // ⭐ BODY
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 🔍 Search + 🎙️ Voice search
+            // 🔍 Search + 🎙 Mic
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _searchController,
                     decoration: const InputDecoration(
-                      hintText: 'Search doctor by name or address',
+                      hintText: "Search doctor by name or address",
                       prefixIcon: Icon(Icons.search),
                       border: OutlineInputBorder(),
                     ),
-                    onChanged: (value) {
-                      setState(() => _searchQuery = value.toLowerCase());
-                    },
+                    onChanged: (value) =>
+                        setState(() => _searchQuery = value.toLowerCase()),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -279,9 +275,10 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                 ),
               ],
             ),
+
             const SizedBox(height: 16),
 
-            // Doctor List
+            // ⭐ Doctor List
             Expanded(
               child: StreamBuilder(
                 stream: doctorsRef.onValue,
@@ -304,22 +301,18 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                   );
 
                   final doctors = data.entries
-                      .map(
-                        (e) =>
-                        MapEntry(e.key, Map<String, dynamic>.from(e.value)),
-                  )
+                      .map((e) =>
+                          MapEntry(e.key, Map<String, dynamic>.from(e.value)))
                       .where((entry) {
                     final doctor = entry.value;
-                    final hasEnabled = doctor.containsKey("enabled");
                     final isDisabled =
-                        hasEnabled && doctor["enabled"] == false;
+                        doctor["enabled"] != null && doctor["enabled"] == false;
                     return !isDisabled && _matchesSearch(doctor);
                   }).toList();
 
                   if (doctors.isEmpty) {
                     return const Center(
-                      child: Text("No doctors match your search."),
-                    );
+                        child: Text("No doctors match your search."));
                   }
 
                   return ListView.builder(
@@ -345,42 +338,32 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                 backgroundColor: Colors.purple.shade100,
                                 backgroundImage: imageUrl != null
                                     ? NetworkImage(imageUrl)
-                                    : const AssetImage(
-                                    "assets/images/doctor_placeholder.png")
-                                as ImageProvider,
+                                    : const AssetImage("images/doctor_placeholder.png")
+                                        as ImageProvider,
                               ),
-                              title:
-                              Text(doctor["fullName"] ?? "Unknown Doctor"),
+                              title: Text(doctor["fullName"] ?? "Unknown Doctor"),
                               subtitle: Text(
                                   doctor["address"] ?? "Address not available"),
-                              trailing: const Icon(
-                                Icons.arrow_forward_ios,
-                                size: 16,
-                              ),
+                              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                               onTap: () {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => DoctorDetailsPage(
                                       doctorName: doctor["fullName"] ?? "",
-                                      description:
-                                      doctor["description"] ?? "",
+                                      description: doctor["description"] ?? "",
                                       staffId: doctor["staffId"] ?? "",
                                       address: doctor["address"] ?? "",
                                       lat: doctor["location"]?["lat"] != null
                                           ? double.tryParse(
-                                        doctor["location"]["lat"]
-                                            .toString(),
-                                      )
+                                              doctor["location"]["lat"].toString())
                                           : null,
                                       lng: doctor["location"]?["lng"] != null
                                           ? double.tryParse(
-                                        doctor["location"]["lng"]
-                                            .toString(),
-                                      )
+                                              doctor["location"]["lng"].toString())
                                           : null,
                                       specialization:
-                                      doctor["specialization"] ?? "",
+                                          doctor["specialization"] ?? "",
                                     ),
                                   ),
                                 );
