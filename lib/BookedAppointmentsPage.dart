@@ -16,13 +16,12 @@ class _BookedAppointmentsPageState extends State<BookedAppointmentsPage> {
 
   final String? currentUserEmail = FirebaseAuth.instance.currentUser?.email;
 
-  void _cancelAppointment(String key) {
+  void _cancelAppointment(String key, bool isPaid) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: const Text("Cancel Appointment"),
-        content:
-        const Text("Are you sure you want to cancel this appointment?"),
+        content: const Text("Are you sure you want to cancel this appointment?"),
         actions: [
           TextButton(
             child: const Text("No"),
@@ -30,13 +29,21 @@ class _BookedAppointmentsPageState extends State<BookedAppointmentsPage> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child:
-            const Text("Yes, Cancel", style: TextStyle(color: Colors.white)),
+            child: const Text(
+              "Yes, Cancel",
+              style: TextStyle(color: Colors.white),
+            ),
             onPressed: () async {
               await _appointmentsRef.child(key).remove();
-              Navigator.pop(context);
+              Navigator.pop(context); // close dialog
+
+              // ✅ Simple message after cancel
+              final message = isPaid
+                  ? "Appointment canceled. Refund in 4–5 days."
+                  : "Appointment canceled.";
+
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Appointment canceled")),
+                SnackBar(content: Text(message)),
               );
             },
           ),
@@ -49,8 +56,10 @@ class _BookedAppointmentsPageState extends State<BookedAppointmentsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("My Booked Appointments",
-            style: TextStyle(color: Colors.white)),
+        title: const Text(
+          "My Booked Appointments",
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.purple,
         centerTitle: true,
       ),
@@ -78,7 +87,7 @@ class _BookedAppointmentsPageState extends State<BookedAppointmentsPage> {
               'time': appt['time'] ?? '',
               'location': appt['location'] ?? '',
               'paid': appt['paid'] ?? false,
-              'status': appt['status'] ?? 'pending', // new fix
+              'status': appt['status'] ?? 'pending',
             };
           }).where((appt) => appt['patientEmail'] == currentUserEmail).toList();
 
@@ -125,22 +134,31 @@ class _BookedAppointmentsPageState extends State<BookedAppointmentsPage> {
                         DataColumn(label: Text('Actions')),
                       ],
                       rows: appointments.map((appt) {
-                        // 🔹 Show Pay button only if accepted + date/time set
+                        final bool isPaid = appt['paid'] == true;
+
                         final showPayButton =
                             appt['status'] == 'accepted' &&
                                 appt['date'] != '' &&
                                 appt['time'] != '' &&
-                                appt['paid'] == false;
+                                !isPaid;
 
                         return DataRow(
                           cells: [
-                            // ✅ Doctor’s name always visible
                             DataCell(Text(appt['doctorName'])),
-
-                            DataCell(Text(
-                                appt['date'].isNotEmpty ? appt['date'] : '-')),
-                            DataCell(Text(
-                                appt['time'].isNotEmpty ? appt['time'] : '-')),
+                            DataCell(
+                              Text(
+                                appt['date'].toString().isNotEmpty
+                                    ? appt['date']
+                                    : '-',
+                              ),
+                            ),
+                            DataCell(
+                              Text(
+                                appt['time'].toString().isNotEmpty
+                                    ? appt['time']
+                                    : '-',
+                              ),
+                            ),
                             DataCell(
                               Text(
                                 appt['status'].toString().toUpperCase(),
@@ -156,44 +174,52 @@ class _BookedAppointmentsPageState extends State<BookedAppointmentsPage> {
                             ),
                             DataCell(
                               Text(
-                                appt['paid'] ? "Yes" : "No",
+                                isPaid ? "Yes" : "No",
                                 style: TextStyle(
-                                  color: appt['paid']
-                                      ? Colors.green
-                                      : Colors.red,
+                                  color: isPaid ? Colors.green : Colors.red,
                                 ),
                               ),
                             ),
-                            DataCell(Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.cancel,
-                                      color: Colors.red),
-                                  tooltip: "Cancel",
-                                  onPressed: () =>
-                                      _cancelAppointment(appt['key']),
-                                ),
-                                if (showPayButton)
-                                  ElevatedButton(
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.purple),
-                                    onPressed: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => PaymentPage(
-                                            doctorName: appt['doctorName'],
-                                            appointmentDate: appt['date'],
-                                            amount: 6.00,
-                                            appointmentKey: appt['key'],
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    child: const Text("Pay", style: TextStyle(color: Colors.white)),
+                            DataCell(
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.cancel,
+                                      color: Colors.red,
+                                    ),
+                                    tooltip: "Cancel",
+                                    onPressed: () => _cancelAppointment(
+                                      appt['key'],
+                                      isPaid,
+                                    ),
                                   ),
-
-                              ],
-                            )),
+                                  if (showPayButton)
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.purple,
+                                      ),
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => PaymentPage(
+                                              doctorName: appt['doctorName'],
+                                              appointmentDate: appt['date'],
+                                              amount: 6.00,
+                                              appointmentKey: appt['key'],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: const Text(
+                                        "Pay",
+                                        style: TextStyle(color: Colors.white),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ],
                         );
                       }).toList(),
