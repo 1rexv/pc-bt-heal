@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-
 import 'PatientLoginPage.dart';
 import 'DoctorDetailsPage.dart';
 import 'PatientProfilePage.dart';
@@ -24,14 +23,13 @@ class PatientDashboardPage extends StatefulWidget {
 
 class _PatientDashboardPageState extends State<PatientDashboardPage> {
   final DatabaseReference doctorsRef =
-      FirebaseDatabase.instance.ref().child("doctors");
+  FirebaseDatabase.instance.ref().child("doctors");
 
   final Map<String, String?> _imageCache = {};
   final TextEditingController _searchController = TextEditingController();
 
   String _searchQuery = "";
 
-  // 🎙️ Speech-to-text
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _isListening = false;
 
@@ -47,7 +45,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const PatientLoginPage()),
-      (route) => false,
+          (route) => false,
     );
   }
 
@@ -72,7 +70,6 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     }
   }
 
-  // 🎤 Voice Search
   Future<void> _toggleVoiceSearch() async {
     if (_isListening) {
       await _speech.stop();
@@ -87,9 +84,16 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
 
     if (!available) {
       if (mounted) {
+        final isArabic =
+            Localizations.localeOf(context).languageCode == 'ar';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Voice search not available. Check mic permissions.")),
+          SnackBar(
+            content: Text(
+              isArabic
+                  ? "البحث الصوتي غير متوفر، يرجى التحقق من صلاحيات الميكروفون."
+                  : "Voice search not available. Check mic permissions.",
+            ),
+          ),
         );
       }
       return;
@@ -131,131 +135,193 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isArabic =
+        Localizations.localeOf(context).languageCode == 'ar';
+
+    final appBarTitle =
+    isArabic ? "لوحة تحكم المريض" : "Patient Dashboard";
+    final drawerHeaderTitle =
+    isArabic ? "مرحباً بالمريض" : "Welcome Patient";
+    final drawerHeaderSubtitle =
+    isArabic ? "خيارات القائمة" : "Menu Options";
+
+    final viewTutorialText =
+    isArabic ? "عرض الشرح التعليمي" : "View Tutorial";
+    final personalProfileText =
+    isArabic ? "الملف الشخصي" : "Personal Profile";
+    final aiChatbotText = isArabic ? "المساعد الذكي" : "AI Chatbot";
+    final medicationInfoText =
+    isArabic ? "الأدوية الموصوفة" : "Medication Info";
+    final sendFeedbackText =
+    isArabic ? "إرسال ملاحظة" : "Send Feedback";
+    final sendProblemText =
+    isArabic ? "إرسال مشكلة" : "Send Problem";
+    final bookedAppointmentsText =
+    isArabic ? "المواعيد المحجوزة" : "Booked Appointments";
+    final locationText = isArabic ? "الموقع" : "Location";
+
+    final searchHint = isArabic
+        ? "ابحث عن طبيب بالاسم أو العنوان"
+        : "Search doctor by name or address";
+
+    final loadingDoctorsText =
+    isArabic ? "جاري تحميل الأطباء..." : "Loading doctors...";
+    final errorDoctorsText =
+    isArabic ? "حدث خطأ أثناء تحميل الأطباء" : "Error loading doctors";
+    final noDoctorsText =
+    isArabic ? "لا يوجد أطباء متاحون" : "No doctors found";
+    final noMatchDoctorsText = isArabic
+        ? "لا يوجد أطباء يطابقون بحثك."
+        : "No doctors match your search.";
+
     return Scaffold(
       appBar: AppBar(
-        title:
-            const Text("Patient Dashboard", style: TextStyle(color: Colors.white)),
+        title: Text(
+          appBarTitle,
+          style: const TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.purple,
         centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: "Sign Out",
+            tooltip: isArabic ? "تسجيل الخروج" : "Sign Out",
             onPressed: () => _signOut(context),
           ),
         ],
       ),
 
-      // ⭐ Drawer Menu (View Tutorial at TOP)
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(color: Colors.purple),
+            DrawerHeader(
+              decoration: const BoxDecoration(color: Colors.purple),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Welcome Patient",
-                      style: TextStyle(color: Colors.white, fontSize: 22)),
-                  SizedBox(height: 8),
-                  Text("Menu Options",
-                      style: TextStyle(color: Colors.white70)),
+                  Text(
+                    drawerHeaderTitle,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    drawerHeaderSubtitle,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                    ),
+                  ),
                 ],
               ),
             ),
-
-            // ⭐ FIRST ITEM
+            
             ListTile(
               leading: const Icon(Icons.school),
-              title: const Text("View Tutorial"),
+              title: Text(viewTutorialText),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const PatientTutorialPage()),
+                MaterialPageRoute(
+                  builder: (_) => const PatientTutorialPage(),
+                ),
               ),
             ),
 
             ListTile(
               leading: const Icon(Icons.person),
-              title: const Text("Personal Profile"),
+              title: Text(personalProfileText),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const PatientProfilePage()),
+                MaterialPageRoute(
+                  builder: (_) => const PatientProfilePage(),
+                ),
               ),
             ),
 
             ListTile(
               leading: const Icon(Icons.smart_toy),
-              title: const Text("AI Chatbot"),
+              title: Text(aiChatbotText),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const AIChatbotPage()),
+                MaterialPageRoute(
+                  builder: (_) => const AIChatbotPage(),
+                ),
               ),
             ),
 
             ListTile(
               leading: const Icon(Icons.medical_services),
-              title: const Text("Medication Info"),
+              title: Text(medicationInfoText),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const MedicationInfoPage()),
+                MaterialPageRoute(
+                  builder: (_) => const MedicationInfoPage(),
+                ),
               ),
             ),
 
             ListTile(
               leading: const Icon(Icons.feedback),
-              title: const Text("Send Feedback"),
+              title: Text(sendFeedbackText),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const SendFeedbackPage()),
+                MaterialPageRoute(
+                  builder: (_) => const SendFeedbackPage(),
+                ),
               ),
             ),
 
             ListTile(
               leading: const Icon(Icons.warning_amber),
-              title: const Text("Send Problem"),
+              title: Text(sendProblemText),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const SendProblemPage()),
+                MaterialPageRoute(
+                  builder: (_) => const SendProblemPage(),
+                ),
               ),
             ),
 
             ListTile(
               leading: const Icon(Icons.calendar_month),
-              title: const Text("Booked Appointments"),
+              title: Text(bookedAppointmentsText),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const BookedAppointmentsPage()),
+                MaterialPageRoute(
+                  builder: (_) => const BookedAppointmentsPage(),
+                ),
               ),
             ),
 
             ListTile(
               leading: const Icon(Icons.location_city),
-              title: const Text("Location"),
+              title: Text(locationText),
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const ClinicHospitalPage()),
+                MaterialPageRoute(
+                  builder: (_) => const ClinicHospitalPage(),
+                ),
               ),
             ),
           ],
         ),
       ),
-
-      // ⭐ BODY
+      
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 🔍 Search + 🎤 Mic
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _searchController,
-                    decoration: const InputDecoration(
-                      hintText: "Search doctor by name or address",
-                      prefixIcon: Icon(Icons.search),
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      hintText: searchHint,
+                      prefixIcon: const Icon(Icons.search),
+                      border: const OutlineInputBorder(),
                     ),
                     onChanged: (value) =>
                         setState(() => _searchQuery = value.toLowerCase()),
@@ -273,23 +339,22 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
             ),
 
             const SizedBox(height: 16),
-
-            // ⭐ Doctor List
+            
             Expanded(
               child: StreamBuilder(
                 stream: doctorsRef.onValue,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return Center(child: Text(loadingDoctorsText));
                   }
 
                   if (snapshot.hasError) {
-                    return const Center(child: Text("Error loading doctors"));
+                    return Center(child: Text(errorDoctorsText));
                   }
 
                   if (!snapshot.hasData ||
                       snapshot.data!.snapshot.value == null) {
-                    return const Center(child: Text("No doctors found"));
+                    return Center(child: Text(noDoctorsText));
                   }
 
                   final data = Map<String, dynamic>.from(
@@ -297,18 +362,21 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                   );
 
                   final doctors = data.entries
-                      .map((e) =>
-                          MapEntry(e.key, Map<String, dynamic>.from(e.value)))
+                      .map(
+                        (e) => MapEntry(
+                      e.key,
+                      Map<String, dynamic>.from(e.value),
+                    ),
+                  )
                       .where((entry) {
                     final doctor = entry.value;
-                    final isDisabled =
-                        doctor["enabled"] != null && doctor["enabled"] == false;
+                    final isDisabled = doctor["enabled"] != null &&
+                        doctor["enabled"] == false;
                     return !isDisabled && _matchesSearch(doctor);
                   }).toList();
 
                   if (doctors.isEmpty) {
-                    return const Center(
-                        child: Text("No doctors match your search."));
+                    return Center(child: Text(noMatchDoctorsText));
                   }
 
                   return ListView.builder(
@@ -334,13 +402,26 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                 backgroundColor: Colors.purple.shade100,
                                 backgroundImage: imageUrl != null
                                     ? NetworkImage(imageUrl)
-                                    : const AssetImage("images/doctor_placeholder.png")
-                                        as ImageProvider,
+                                    : const AssetImage(
+                                    "images/doctor_placeholder.png")
+                                as ImageProvider,
                               ),
-                              title: Text(doctor["fullName"] ?? "Unknown Doctor"),
+                              title: Text(
+                                doctor["fullName"] ??
+                                    (isArabic
+                                        ? "طبيب غير معروف"
+                                        : "Unknown Doctor"),
+                              ),
                               subtitle: Text(
-                                  doctor["address"] ?? "Address not available"),
-                              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                                doctor["address"] ??
+                                    (isArabic
+                                        ? "العنوان غير متوفر"
+                                        : "Address not available"),
+                              ),
+                              trailing: const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                              ),
                               onTap: () {
                                 Navigator.push(
                                   context,
@@ -348,21 +429,23 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                     builder: (_) => DoctorDetailsPage(
                                       doctorName: doctor["fullName"] ?? "",
                                       description:
-                                          doctor["description"] ?? "",
+                                      doctor["description"] ?? "",
                                       staffId: doctor["staffId"] ?? "",
                                       address: doctor["address"] ?? "",
                                       lat: doctor["location"]?["lat"] != null
                                           ? double.tryParse(
-                                              doctor["location"]["lat"]
-                                                  .toString())
+                                        doctor["location"]["lat"]
+                                            .toString(),
+                                      )
                                           : null,
                                       lng: doctor["location"]?["lng"] != null
                                           ? double.tryParse(
-                                              doctor["location"]["lng"]
-                                                  .toString())
+                                        doctor["location"]["lng"]
+                                            .toString(),
+                                      )
                                           : null,
                                       specialization:
-                                          doctor["specialization"] ?? "",
+                                      doctor["specialization"] ?? "",
                                     ),
                                   ),
                                 );
