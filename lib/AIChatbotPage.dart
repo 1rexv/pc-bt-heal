@@ -14,7 +14,7 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
   final List<Map<String, dynamic>> _messages = [];
   bool _isSending = false;
   bool _greetingInitialized = false;
-  bool _quickExpanded = false; 
+  bool _quickExpanded = false;
 
   final List<String> _questionsEn = const [
     "I have headache and blurry vision",
@@ -82,6 +82,11 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
   }
 
   Future<void> _sendMessage([String? preset]) async {
+    final isArabic = Localizations.localeOf(context)
+        .languageCode
+        .toLowerCase()
+        .startsWith('ar');
+
     final userMessage = (preset ?? _controller.text).trim();
     if (userMessage.isEmpty || _isSending) return;
 
@@ -114,24 +119,26 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final botReply =
-            data["reply"] as String? ?? "Sorry, I could not generate a response.";
+        final botReply = data["reply"] as String? ??
+            (isArabic
+                ? "عذرًا، لم أتمكن من توليد رد. حاول مرة أخرى."
+                : "Sorry, I could not generate a response.");
         _addBotMessage(botReply);
       } else {
-        _addBotMessage(
-          "Sorry, I could not reach the HEAL server (error ${response.statusCode}).",
-        );
+        _addBotMessage(isArabic
+            ? "عذرًا، لا يمكن الوصول إلى خادم HEAL (خطأ ${response.statusCode})."
+            : "Sorry, I could not reach the HEAL server (error ${response.statusCode}).");
       }
     } catch (e) {
-      _addBotMessage(
-        "There was a problem connecting to the HEAL backend. Please try again.",
-      );
+      _addBotMessage(isArabic
+          ? "حدثت مشكلة في الاتصال بخادم HEAL. الرجاء المحاولة لاحقًا."
+          : "There was a problem connecting to the HEAL backend. Please try again.");
     } finally {
       setState(() => _isSending = false);
     }
   }
 
-  Widget _buildBotBubble(String text) {
+  Widget _buildBotBubble(String text, bool isArabic) {
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
@@ -162,6 +169,7 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
               child: Text(
                 text,
                 style: const TextStyle(fontSize: 14, height: 1.4),
+                textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
               ),
             ),
           ],
@@ -170,7 +178,7 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
     );
   }
 
-  Widget _buildUserBubble(String text) {
+  Widget _buildUserBubble(String text, bool isArabic) {
     return Align(
       alignment: Alignment.centerRight,
       child: Container(
@@ -186,6 +194,7 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
             color: Colors.white,
             fontSize: 14,
           ),
+          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
         ),
       ),
     );
@@ -204,12 +213,13 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
     final quickTitle = isArabic ? "أسئلة سريعة" : "Quick Questions";
     final hintText =
     isArabic ? "اكتبي الأعراض أو سؤالك هنا..." : "Type your symptoms or question...";
+    final appBarTitle = isArabic ? "مساعد شات الشفاء" : "HEAL Chatbot";
 
     return Scaffold(
       backgroundColor: background,
       appBar: AppBar(
         title: Text(
-          isArabic ? "مساعد شات الشفاء" : "HEAL Chatbot",
+          appBarTitle,
           style: const TextStyle(color: Colors.white),
         ),
         backgroundColor: Colors.purple,
@@ -221,8 +231,7 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
           children: [
             Expanded(
               child: Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
@@ -239,8 +248,8 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                           final msg = _messages[index];
                           final isUser = msg['sender'] == "user";
                           return isUser
-                              ? _buildUserBubble(msg['message'] as String)
-                              : _buildBotBubble(msg['message'] as String);
+                              ? _buildUserBubble(msg['message'] as String, isArabic)
+                              : _buildBotBubble(msg['message'] as String, isArabic);
                         },
                       ),
                     ),
@@ -250,8 +259,7 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
             ),
 
             Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: Card(
                 elevation: 1,
                 shape: RoundedRectangleBorder(
@@ -278,23 +286,19 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                           : Icons.keyboard_arrow_down_rounded,
                       color: Colors.purple,
                     ),
-                    childrenPadding:
-                    const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     children: [
                       Column(
-                        crossAxisAlignment: isArabic
-                            ? CrossAxisAlignment.end
-                            : CrossAxisAlignment.start,
+                        crossAxisAlignment:
+                        isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                         children: questions.map((q) {
                           return InkWell(
                             onTap: () => _sendMessage(q),
                             child: Padding(
-                              padding:
-                              const EdgeInsets.symmetric(vertical: 6),
+                              padding: const EdgeInsets.symmetric(vertical: 6),
                               child: Row(
-                                mainAxisAlignment: isArabic
-                                    ? MainAxisAlignment.end
-                                    : MainAxisAlignment.start,
+                                mainAxisAlignment:
+                                isArabic ? MainAxisAlignment.end : MainAxisAlignment.start,
                                 children: [
                                   if (!isArabic)
                                     Text(
@@ -307,9 +311,7 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                                   Expanded(
                                     child: Text(
                                       q,
-                                      textAlign: isArabic
-                                          ? TextAlign.right
-                                          : TextAlign.left,
+                                      textAlign: isArabic ? TextAlign.right : TextAlign.left,
                                       style: const TextStyle(
                                         fontSize: 13,
                                         color: Colors.black87,
@@ -336,9 +338,9 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                 ),
               ),
             ),
+
             Padding(
-              padding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
                   Expanded(
@@ -356,12 +358,11 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                       ),
                       child: TextField(
                         controller: _controller,
-                        textDirection:
-                        isArabic ? TextDirection.rtl : TextDirection.ltr,
+                        textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
                         decoration: InputDecoration(
                           hintText: hintText,
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
+                          contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           border: InputBorder.none,
                         ),
                         onSubmitted: (_) => _sendMessage(),
@@ -386,8 +387,7 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                          : const Icon(Icons.send,
-                          size: 20, color: Colors.white),
+                          : const Icon(Icons.send, size: 20, color: Colors.white),
                     ),
                   ),
                 ],
