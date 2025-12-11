@@ -6,16 +6,20 @@ import 'package:url_launcher/url_launcher.dart';
 class AdminDoctorListPage extends StatelessWidget {
   const AdminDoctorListPage({super.key});
 
+  bool _isArabic(BuildContext context) =>
+      Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
+
+  String _t(BuildContext context, String en, String ar) => _isArabic(context) ? ar : en;
+
   @override
   Widget build(BuildContext context) {
     final purple = Colors.purple;
+    final isArabic = _isArabic(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Doctors',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: Text(_t(context, 'Doctors', 'الأطباء'),
+            style: const TextStyle(color: Colors.white)),
         backgroundColor: purple,
         centerTitle: true,
       ),
@@ -26,19 +30,15 @@ class AdminDoctorListPage extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (!snapshot.hasData ||
-              snapshot.data!.snapshot.value == null) {
-            return const Center(child: Text('No doctors found.'));
+          if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+            return Center(child: Text(_t(context, 'No doctors found.', 'لا يوجد أطباء.')));
           }
 
-          final data = Map<String, dynamic>.from(
-            snapshot.data!.snapshot.value as Map,
-          );
-
+          final data = Map<String, dynamic>.from(snapshot.data!.snapshot.value as Map);
           final doctorList = data.entries.map((entry) {
             final uid = entry.key;
             final doc = Map<String, dynamic>.from(entry.value);
-            doc['uid'] = uid; // keep uid for later if needed
+            doc['uid'] = uid;
             return doc;
           }).toList();
 
@@ -81,24 +81,23 @@ class AdminDoctorListPage extends StatelessWidget {
                           backgroundImage: profileImage.isNotEmpty
                               ? NetworkImage(profileImage)
                               : null,
-                          child: profileImage.isEmpty
-                              ? const Icon(Icons.person, size: 32)
-                              : null,
+                          child: profileImage.isEmpty ? const Icon(Icons.person, size: 32) : null,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                            isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                             children: [
                               Text(
-                                fullName.isEmpty ? 'Unknown Doctor' : fullName,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                fullName.isEmpty ? _t(context, 'Unknown Doctor', 'طبيب غير معروف') : fullName,
+                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                textAlign: isArabic ? TextAlign.right : TextAlign.left,
                               ),
                               const SizedBox(height: 4),
                               Row(
+                                mainAxisAlignment:
+                                isArabic ? MainAxisAlignment.end : MainAxisAlignment.start,
                                 children: [
                                   const Icon(Icons.email, size: 16),
                                   const SizedBox(width: 4),
@@ -107,6 +106,7 @@ class AdminDoctorListPage extends StatelessWidget {
                                       email,
                                       style: const TextStyle(fontSize: 13),
                                       overflow: TextOverflow.ellipsis,
+                                      textAlign: isArabic ? TextAlign.right : TextAlign.left,
                                     ),
                                   ),
                                 ],
@@ -114,12 +114,15 @@ class AdminDoctorListPage extends StatelessWidget {
                               const SizedBox(height: 2),
                               if (phone.isNotEmpty)
                                 Row(
+                                  mainAxisAlignment:
+                                  isArabic ? MainAxisAlignment.end : MainAxisAlignment.start,
                                   children: [
                                     const Icon(Icons.phone, size: 16),
                                     const SizedBox(width: 4),
                                     Text(
                                       phone,
                                       style: const TextStyle(fontSize: 13),
+                                      textAlign: isArabic ? TextAlign.right : TextAlign.left,
                                     ),
                                   ],
                                 ),
@@ -127,6 +130,8 @@ class AdminDoctorListPage extends StatelessWidget {
                               if (address.isNotEmpty)
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment:
+                                  isArabic ? MainAxisAlignment.end : MainAxisAlignment.start,
                                   children: [
                                     const Icon(Icons.location_on, size: 16),
                                     const SizedBox(width: 4),
@@ -134,29 +139,26 @@ class AdminDoctorListPage extends StatelessWidget {
                                       child: Text(
                                         address,
                                         style: const TextStyle(fontSize: 13),
+                                        textAlign: isArabic ? TextAlign.right : TextAlign.left,
                                       ),
                                     ),
                                   ],
                                 ),
                               const SizedBox(height: 8),
                               Align(
-                                alignment: Alignment.centerRight,
+                                alignment: isArabic ? Alignment.centerLeft : Alignment.centerRight,
                                 child: TextButton.icon(
                                   onPressed: () {
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (_) => DoctorDetailsPage(
-                                          doctor: doctor,
-                                        ),
+                                        builder: (_) => DoctorDetailsPage(doctor: doctor),
                                       ),
                                     );
                                   },
                                   icon: const Icon(Icons.info_outline),
-                                  label: const Text('View Details'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: purple,
-                                  ),
+                                  label: Text(_t(context, 'View Details', 'عرض التفاصيل')),
+                                  style: TextButton.styleFrom(foregroundColor: purple),
                                 ),
                               ),
                             ],
@@ -187,24 +189,40 @@ class DoctorDetailsPage extends StatelessWidget {
     final lat = loc['lat'];
     final lng = loc['lng'];
     if (lat == null || lng == null) return null;
-    return LatLng(lat * 1.0, lng * 1.0);
+    try {
+      final dLat = double.tryParse(lat.toString()) ?? (lat as num).toDouble();
+      final dLng = double.tryParse(lng.toString()) ?? (lng as num).toDouble();
+      return LatLng(dLat, dLng);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _openCertificate(BuildContext context) async {
     final certUrl = (doctor['certificates'] ?? '') as String;
+    final isArabic = Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
+    final t = (String en, String ar) => isArabic ? ar : en;
+
     if (certUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No certificate uploaded')),
+        SnackBar(content: Text(t('No certificate uploaded', 'لم يتم رفع شهادة'))),
       );
       return;
     }
 
-    final uri = Uri.parse(certUrl);
+    final uri = Uri.tryParse(certUrl);
+    if (uri == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(t('Invalid certificate link', 'رابط الشهادة غير صالح'))),
+      );
+      return;
+    }
+
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open certificate link')),
+        SnackBar(content: Text(t('Could not open certificate link', 'تعذر فتح رابط الشهادة'))),
       );
     }
   }
@@ -212,6 +230,8 @@ class DoctorDetailsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final purple = Colors.purple;
+    final isArabic = Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
+    final t = (String en, String ar) => isArabic ? ar : en;
 
     final fullName = (doctor['fullName'] ?? '') as String;
     final email = (doctor['email'] ?? '') as String;
@@ -226,50 +246,40 @@ class DoctorDetailsPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'Doctor Details',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: Text(t('Doctor Details', 'تفاصيل الطبيب'), style: const TextStyle(color: Colors.white)),
         backgroundColor: purple,
         centerTitle: true,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
+          crossAxisAlignment: isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             // Top Card with avatar & main info
             Card(
               elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               child: Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     CircleAvatar(
                       radius: 40,
                       backgroundColor: purple.withOpacity(0.1),
-                      backgroundImage: profileImage.isNotEmpty
-                          ? NetworkImage(profileImage)
-                          : null,
-                      child: profileImage.isEmpty
-                          ? const Icon(Icons.person, size: 40)
-                          : null,
+                      backgroundImage: profileImage.isNotEmpty ? NetworkImage(profileImage) : null,
+                      child: profileImage.isEmpty ? const Icon(Icons.person, size: 40) : null,
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment:
+                        isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                         children: [
                           Text(
-                            fullName.isEmpty ? 'Unknown Doctor' : fullName,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            fullName.isEmpty ? t('Unknown Doctor', 'طبيب غير معروف') : fullName,
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            textAlign: isArabic ? TextAlign.right : TextAlign.left,
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -279,14 +289,17 @@ class DoctorDetailsPage extends StatelessWidget {
                               color: purple.shade300,
                               fontWeight: FontWeight.w500,
                             ),
+                            textAlign: isArabic ? TextAlign.right : TextAlign.left,
                           ),
                           const SizedBox(height: 8),
                           if (staffId.isNotEmpty)
                             Row(
+                              mainAxisAlignment:
+                              isArabic ? MainAxisAlignment.end : MainAxisAlignment.start,
                               children: [
                                 const Icon(Icons.badge, size: 18),
                                 const SizedBox(width: 6),
-                                Text('Staff ID: $staffId'),
+                                Text('${t('Staff ID', 'الرقم الوظيفي')}: $staffId'),
                               ],
                             ),
                         ],
@@ -302,57 +315,49 @@ class DoctorDetailsPage extends StatelessWidget {
             // Contact info card
             Card(
               elevation: 2,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                  isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Contact Information',
-                      style:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                    Text(t('Contact Information', 'معلومات الاتصال'),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     Row(
+                      mainAxisAlignment:
+                      isArabic ? MainAxisAlignment.end : MainAxisAlignment.start,
                       children: [
                         const Icon(Icons.email_outlined, size: 20),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            email,
-                            style: const TextStyle(fontSize: 14),
-                          ),
+                          child: Text(email, textAlign: isArabic ? TextAlign.right : TextAlign.left),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
                     if (phone.isNotEmpty)
                       Row(
+                        mainAxisAlignment:
+                        isArabic ? MainAxisAlignment.end : MainAxisAlignment.start,
                         children: [
                           const Icon(Icons.phone_outlined, size: 20),
                           const SizedBox(width: 8),
-                          Text(
-                            phone,
-                            style: const TextStyle(fontSize: 14),
-                          ),
+                          Text(phone, textAlign: isArabic ? TextAlign.right : TextAlign.left),
                         ],
                       ),
                     const SizedBox(height: 6),
                     if (address.isNotEmpty)
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment:
+                        isArabic ? MainAxisAlignment.end : MainAxisAlignment.start,
                         children: [
                           const Icon(Icons.location_on_outlined, size: 20),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(
-                              address,
-                              style: const TextStyle(fontSize: 14),
-                            ),
+                            child: Text(address, textAlign: isArabic ? TextAlign.right : TextAlign.left),
                           ),
                         ],
                       ),
@@ -367,24 +372,17 @@ class DoctorDetailsPage extends StatelessWidget {
             if (description.isNotEmpty)
               Card(
                 elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                    isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Doctor Description',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
+                      Text(t('Doctor Description', 'وصف الطبيب'),
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 8),
-                      Text(
-                        description,
-                        style: const TextStyle(fontSize: 14),
-                      ),
+                      Text(description, textAlign: isArabic ? TextAlign.right : TextAlign.left),
                     ],
                   ),
                 ),
@@ -395,15 +393,13 @@ class DoctorDetailsPage extends StatelessWidget {
             // Location map (if available)
             if (location != null)
               Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Location',
-                      style:
-                      TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                  Align(
+                    alignment: isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Text(t('Location', 'الموقع'),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(height: 8),
                   ClipRRect(
@@ -411,15 +407,9 @@ class DoctorDetailsPage extends StatelessWidget {
                     child: SizedBox(
                       height: 200,
                       child: GoogleMap(
-                        initialCameraPosition: CameraPosition(
-                          target: location,
-                          zoom: 13,
-                        ),
+                        initialCameraPosition: CameraPosition(target: location, zoom: 13),
                         markers: {
-                          Marker(
-                            markerId: const MarkerId('doctor-location'),
-                            position: location,
-                          ),
+                          Marker(markerId: const MarkerId('doctor-location'), position: location),
                         },
                         zoomControlsEnabled: false,
                         myLocationButtonEnabled: false,
@@ -439,14 +429,11 @@ class DoctorDetailsPage extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: purple,
                   foregroundColor: Colors.white,
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 icon: const Icon(Icons.picture_as_pdf),
-                label: const Text('View Certificate'),
+                label: Text(t('View Certificate', 'عرض الشهادة')),
               ),
             ),
           ],
