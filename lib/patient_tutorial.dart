@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,52 +12,95 @@ class PatientTutorialPage extends StatefulWidget {
   State<PatientTutorialPage> createState() => _PatientTutorialPageState();
 }
 
+class _TutorialItem {
+  final IconData icon;
+  final String titleEn;
+  final String descEn;
+  final String titleAr;
+  final String descAr;
+
+  _TutorialItem({
+    required this.icon,
+    required this.titleEn,
+    required this.descEn,
+    required this.titleAr,
+    required this.descAr,
+  });
+}
+
 class _PatientTutorialPageState extends State<PatientTutorialPage> {
   final PageController _controller = PageController();
   int _currentIndex = 0;
 
-  final List<_TutorialItem> _tutorialPages = [
-    _TutorialItem(
-      icon: Icons.pregnant_woman,
-      title: "Welcome, Mama 💕",
-      desc: "This app supports you throughout your pregnancy and health journey.",
-    ),
-    _TutorialItem(
-      icon: Icons.person,
-      title: "Your Profile",
-      desc: "Add your details so the app can personalize your care and reminders.",
-    ),
-    _TutorialItem(
-      icon: Icons.smart_toy,
-      title: "AI Chat Support",
-      desc: "Ask questions anytime. Our AI assistant helps with safe guidance.",
-    ),
-    _TutorialItem(
-      icon: Icons.medical_services,
-      title: "Medication Info",
-      desc: "Check ingredients, risks, and safe medication information.",
-    ),
-    _TutorialItem(
-      icon: Icons.calendar_month,
-      title: "Appointments",
-      desc: "Track your pregnancy checkups and doctor visits in one place.",
-    ),
-    _TutorialItem(
-      icon: Icons.feedback,
-      title: "Feedback",
-      desc: "Share your experience so we can improve and support other women.",
-    ),
-    _TutorialItem(
-      icon: Icons.warning_amber,
-      title: "Report Problems",
-      desc: "Report any issues so we can help you better.",
-    ),
-    _TutorialItem(
-      icon: Icons.local_hospital,
-      title: "Clinics & Hospitals",
-      desc: "Find nearby health centers whenever you need care.",
-    ),
-  ];
+  late final List<_TutorialItem> _tutorialPages;
+
+  bool get _isArabic =>
+      Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Define tutorial content (both languages)
+    _tutorialPages = [
+      _TutorialItem(
+        icon: Icons.pregnant_woman,
+        titleEn: "Welcome, Mama 💕",
+        descEn: "This app supports you throughout your pregnancy and health journey.",
+        titleAr: "أهلاً بكِ يا أمِّي 💕",
+        descAr: "التطبيق يدعمك طوال رحلة الحمل والعناية الصحيّة.",
+      ),
+      _TutorialItem(
+        icon: Icons.person,
+        titleEn: "Your Profile",
+        descEn: "Add your details so the app can personalize your care and reminders.",
+        titleAr: "الملف الشخصي",
+        descAr: "أدخلي بياناتك حتى يقوم التطبيق بتخصيص الرعاية والتذكيرات.",
+      ),
+      _TutorialItem(
+        icon: Icons.smart_toy,
+        titleEn: "AI Chat Support",
+        descEn: "Ask questions anytime. Our AI assistant helps with safe guidance.",
+        titleAr: "المساعد الذكي",
+        descAr: "استخدمي المساعد لطرح الأسئلة؛ يقدم إرشادات عامة وآمنة.",
+      ),
+      _TutorialItem(
+        icon: Icons.medical_services,
+        titleEn: "Medication Info",
+        descEn: "Check ingredients, risks, and safe medication information.",
+        titleAr: "معلومات الأدوية",
+        descAr: "تحققي من المكونات والمخاطر ومعلومات الأدوية الآمنة.",
+      ),
+      _TutorialItem(
+        icon: Icons.calendar_month,
+        titleEn: "Appointments",
+        descEn: "Track your pregnancy checkups and doctor visits in one place.",
+        titleAr: "المواعيد",
+        descAr: "تابعي مواعيد المتابعة وزيارات الطبيب في مكان واحد.",
+      ),
+      _TutorialItem(
+        icon: Icons.feedback,
+        titleEn: "Feedback",
+        descEn: "Share your experience so we can improve and support other women.",
+        titleAr: "الملاحظات",
+        descAr: "شاركي تجربتك لنعمل على تحسين التطبيق ودعم أخريات.",
+      ),
+      _TutorialItem(
+        icon: Icons.warning_amber,
+        titleEn: "Report Problems",
+        descEn: "Report any issues so we can help you better.",
+        titleAr: "الإبلاغ عن المشاكل",
+        descAr: "أبلِغِي عن أي مشكلة لنتمكن من مساعدتك بشكل أسرع.",
+      ),
+      _TutorialItem(
+        icon: Icons.local_hospital,
+        titleEn: "Clinics & Hospitals",
+        descEn: "Find nearby health centers whenever you need care.",
+        titleAr: "العيادات والمستشفيات",
+        descAr: "ابحثي عن المراكز الصحية القريبة عند الحاجة للرعاية.",
+      ),
+    ];
+  }
 
   Future<void> _completeTutorial() async {
     final prefs = await SharedPreferences.getInstance();
@@ -76,6 +120,14 @@ class _PatientTutorialPageState extends State<PatientTutorialPage> {
   }
 
   Widget _buildPage(_TutorialItem item, bool isLast) {
+    final title = _isArabic ? item.titleAr : item.titleEn;
+    final desc = _isArabic ? item.descAr : item.descEn;
+
+    // Buttons' text
+    final startText = _isArabic ? "ابدئي رحلتي" : "Start My Journey";
+    final skipText = _isArabic ? "تخطي" : "Skip";
+    final nextText = _isArabic ? "التالي" : "Next";
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Column(
@@ -105,25 +157,27 @@ class _PatientTutorialPageState extends State<PatientTutorialPage> {
 
           // Title
           Text(
-            item.title,
+            title,
             style: const TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.bold,
               color: Color(0xFFA346F3),
             ),
             textAlign: TextAlign.center,
+            textDirection: _isArabic ? TextDirection.rtl : TextDirection.ltr,
           ),
           const SizedBox(height: 12),
 
           // Description
           Text(
-            item.desc,
+            desc,
             style: const TextStyle(
               fontSize: 16,
               color: Color(0xFF555555),
               height: 1.4,
             ),
             textAlign: TextAlign.center,
+            textDirection: _isArabic ? TextDirection.rtl : TextDirection.ltr,
           ),
           const SizedBox(height: 32),
 
@@ -140,9 +194,9 @@ class _PatientTutorialPageState extends State<PatientTutorialPage> {
                     borderRadius: BorderRadius.circular(30),
                   ),
                 ),
-                child: const Text(
-                  "Start My Journey",
-                  style: TextStyle(color: Colors.white, fontSize: 16),
+                child: Text(
+                  startText,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
                 ),
               ),
             )
@@ -152,13 +206,14 @@ class _PatientTutorialPageState extends State<PatientTutorialPage> {
               children: [
                 TextButton(
                   onPressed: _completeTutorial,
-                  child: const Text(
-                    "Skip",
-                    style: TextStyle(
+                  child: Text(
+                    skipText,
+                    style: const TextStyle(
                       fontSize: 16,
                       color: Color(0xFFB01AE4),
                       fontWeight: FontWeight.w600,
                     ),
+                    textDirection: TextDirection.ltr,
                   ),
                 ),
                 ElevatedButton(
@@ -173,12 +228,11 @@ class _PatientTutorialPageState extends State<PatientTutorialPage> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   ),
-                  child: const Text(
-                    "Next",
-                    style: TextStyle(color: Colors.white),
+                  child: Text(
+                    nextText,
+                    style: const TextStyle(color: Colors.white),
                   ),
                 ),
               ],
@@ -191,89 +245,83 @@ class _PatientTutorialPageState extends State<PatientTutorialPage> {
   @override
   Widget build(BuildContext context) {
     final total = _tutorialPages.length;
+    final stepText = _isArabic ? "الخطوة" : "Step";
+    final ofText = _isArabic ? "من" : "of";
 
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFFFF0F7), Color(0xFFEAD7FF)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+    return Directionality(
+      textDirection: _isArabic ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFFFF0F7), Color(0xFFEAD7FF)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Top step indicator
-              Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    "Step ${_currentIndex + 1} of $total",
-                    style: const TextStyle(
-                      color: Color(0xFF8A2BE2),
-                      fontWeight: FontWeight.w600,
+          child: SafeArea(
+            child: Column(
+              children: [
+                // Top step indicator
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  child: Align(
+                    alignment: _isArabic ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Text(
+                      // e.g. "Step 1 of 8" or arabic "الخطوة 1 من 8"
+                      _isArabic
+                          ? "$stepText ${_currentIndex + 1} $ofText $total"
+                          : "$stepText ${_currentIndex + 1} $ofText $total",
+                      style: const TextStyle(
+                        color: Color(0xFF8A2BE2),
+                        fontWeight: FontWeight.w600,
+                      ),
+                      textDirection: _isArabic ? TextDirection.rtl : TextDirection.ltr,
                     ),
                   ),
                 ),
-              ),
 
-              // Pages
-              Expanded(
-                child: PageView.builder(
-                  controller: _controller,
-                  itemCount: total,
-                  onPageChanged: (index) {
-                    setState(() => _currentIndex = index);
-                  },
-                  itemBuilder: (context, index) {
-                    final item = _tutorialPages[index];
-                    final isLast = index == total - 1;
-                    return _buildPage(item, isLast);
-                  },
+                // Pages
+                Expanded(
+                  child: PageView.builder(
+                    controller: _controller,
+                    itemCount: total,
+                    onPageChanged: (index) {
+                      setState(() => _currentIndex = index);
+                    },
+                    itemBuilder: (context, index) {
+                      final item = _tutorialPages[index];
+                      final isLast = index == total - 1;
+                      return _buildPage(item, isLast);
+                    },
+                  ),
                 ),
-              ),
 
-              // Dots
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    total,
-                        (index) => AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      height: 8,
-                      width: _currentIndex == index ? 22 : 8,
-                      decoration: BoxDecoration(
-                        color: _currentIndex == index
-                            ? const Color(0xFF8A2BE2)
-                            : const Color(0xFFD2B6FF),
-                        borderRadius: BorderRadius.circular(20),
+                // Dots
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      total,
+                          (index) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        height: 8,
+                        width: _currentIndex == index ? 22 : 8,
+                        decoration: BoxDecoration(
+                          color: _currentIndex == index ? const Color(0xFF8A2BE2) : const Color(0xFFD2B6FF),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-}
-
-class _TutorialItem {
-  final IconData icon;
-  final String title;
-  final String desc;
-
-  _TutorialItem({
-    required this.icon,
-    required this.title,
-    required this.desc,
-  });
 }
