@@ -11,11 +11,16 @@ class TrackProgressPage extends StatefulWidget {
 class _TrackProgressPageState extends State<TrackProgressPage> {
   final DatabaseReference db = FirebaseDatabase.instance.ref();
 
+  bool get _isArabic =>
+      Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
+
+  String _t(String en, String ar) => _isArabic ? ar : en;
+
   Future<int> _getCount(String path) async {
     final snapshot = await db.child(path).get();
     if (snapshot.exists) {
       final data = snapshot.value;
-      if (data is Map) return data.length; // count number of children
+      if (data is Map) return data.length;
     }
     return 0;
   }
@@ -58,52 +63,111 @@ class _TrackProgressPageState extends State<TrackProgressPage> {
 
   @override
   Widget build(BuildContext context) {
+    final purple = Colors.purple;
+    final isArabic = _isArabic;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('System Progress Report', style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.purple,
+        title: Text(
+          _t('System Progress Report', 'تقرير تقدم النظام'),
+          style: const TextStyle(color: Colors.white),
+        ),
+        backgroundColor: purple,
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _buildFutureCard('Total Registered Doctors', Icons.medical_services, _getCount("doctors")),
-          _buildFutureCard('Total Registered Patients', Icons.people, _getCount("patients")),
-          _buildFutureCard('Appointments Scheduled', Icons.calendar_today, _getAppointmentsCount()),
-          _buildFutureCard('Medicines Added', Icons.medication, _getCount("medicines")),
-          _buildFutureCard('Total Feedbacks Received', Icons.feedback, _getFeedbackCount()),
-          _buildFutureCard('AI Chatbot Interactions', Icons.chat, _getChatCount()),],
+          _buildFutureCard(
+            _t('Total Registered Doctors', 'إجمالي الأطباء المسجلين'),
+            Icons.medical_services,
+            _getCount("doctors"),
+            isArabic,
+          ),
+          _buildFutureCard(
+            _t('Total Registered Patients', 'إجمالي المرضى المسجلين'),
+            Icons.people,
+            _getCount("patients"),
+            isArabic,
+          ),
+          _buildFutureCard(
+            _t('Appointments Scheduled', 'المواعيد المجدولة'),
+            Icons.calendar_today,
+            _getAppointmentsCount(),
+            isArabic,
+          ),
+          _buildFutureCard(
+            _t('Medicines Added', 'الأدوية المضافة'),
+            Icons.medication,
+            _getCount("medicines"),
+            isArabic,
+          ),
+          _buildFutureCard(
+            _t('Total Feedbacks Received', 'إجمالي الملاحظات المستلمة'),
+            Icons.feedback,
+            _getFeedbackCount(),
+            isArabic,
+          ),
+          _buildFutureCard(
+            _t('AI Chatbot Interactions', 'تفاعلات الشات بوت'),
+            Icons.chat,
+            _getChatCount(),
+            isArabic,
+          ),
+          _buildFutureCard(
+            _t('Scans Uploaded', 'الفحوصات المرفوعة'),
+            Icons.image,
+            _getScansCount(),
+            isArabic,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildFutureCard(String title, IconData icon, Future<int> futureCount) {
+  Widget _buildFutureCard(String title, IconData icon, Future<int> futureCount, bool isArabic) {
     return FutureBuilder<int>(
       future: futureCount,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return _buildReportCard(title, "Loading...", icon);
+          return _buildReportCard(title, _tStatic('Loading...', 'جاري التحميل...'), icon, isArabic);
         }
         if (snapshot.hasError) {
-          return _buildReportCard(title, "Error", icon);
+          return _buildReportCard(title, _tStatic('Error', 'خطأ'), icon, isArabic);
         }
-        return _buildReportCard(title, snapshot.data.toString(), icon);
+        final value = (snapshot.data ?? 0).toString();
+        return _buildReportCard(title, value, icon, isArabic);
       },
     );
   }
 
-  Widget _buildReportCard(String title, String value, IconData icon) {
+  // helper that doesn't access context (used from places where context may be different)
+  String _tStatic(String en, String ar) {
+    try {
+      return _t(en, ar);
+    } catch (_) {
+      // fallback if context not available
+      return en;
+    }
+  }
+
+  Widget _buildReportCard(String title, String value, IconData icon, bool isArabic) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 3,
       margin: const EdgeInsets.symmetric(vertical: 10),
       child: ListTile(
         leading: Icon(icon, color: Colors.purple, size: 30),
-        title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          textAlign: isArabic ? TextAlign.right : TextAlign.left,
+        ),
         trailing: Text(
           value,
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.purple),
         ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
   }
