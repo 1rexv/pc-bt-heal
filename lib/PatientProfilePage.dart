@@ -1,8 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'package:intl/intl.dart';
 
 class PatientProfilePage extends StatefulWidget {
@@ -24,23 +24,60 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
     _loadUserData();
   }
 
+  bool get _isArabic =>
+      Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
+
+  String _t(String en, String ar) => _isArabic ? ar : en;
+
+  TextAlign get _fieldAlign => _isArabic ? TextAlign.right : TextAlign.left;
+  CrossAxisAlignment get _colAlign =>
+      _isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+
   Future<void> _loadUserData() async {
     if (user == null) return;
     final snapshot = await _database.child('users/${user!.uid}').get();
     if (snapshot.exists) {
       final data = Map<String, dynamic>.from(snapshot.value as Map<Object?, Object?>);
+
+      // Format date if possible according to locale
+      String formattedDob = (data['dateOfBirth'] ?? '').toString();
+      if ((data['dateOfBirth'] ?? '').toString().isNotEmpty) {
+        final raw = data['dateOfBirth'].toString();
+        DateTime? parsed;
+        try {
+          parsed = DateTime.tryParse(raw);
+        } catch (_) {
+          parsed = null;
+        }
+        if (parsed != null) {
+          try {
+            formattedDob = DateFormat.yMMMMd(_isArabic ? 'ar' : 'en').format(parsed);
+          } catch (_) {
+            // fallback to ISO substring
+            formattedDob = parsed.toLocal().toString().split(' ')[0];
+          }
+        } else {
+          // maybe already formatted string — leave as is
+          formattedDob = raw;
+        }
+      }
+
       setState(() {
         patientData = {
           "Full Name": data['name'] ?? '',
           "Email": data['email'] ?? '',
           "Phone Number": data['phone'] ?? '',
           "National ID": data['civilId'] ?? '',
-          "Date of Birth": data['dateOfBirth'] ?? '',
+          "Date of Birth": formattedDob,
           "Blood Type": data['bloodType'] ?? '',
           "Gender": data['gender'] ?? '',
           "Emergency Contact": data['emergencyContact'] ?? '',
           "Address": data['address'] ?? '',
         };
+      });
+    } else {
+      setState(() {
+        patientData = {};
       });
     }
   }
@@ -54,7 +91,7 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Profile Image"),
+            Text(_t("Profile Image", "صورة الملف الشخصي")),
             IconButton(
               icon: const Icon(Icons.close),
               onPressed: () => Navigator.of(context).pop(),
@@ -77,7 +114,7 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
               },
             ),
             const SizedBox(height: 10),
-            const Text("Import Image", style: TextStyle(fontSize: 16))
+            Text(_t("Import Image", "استيراد صورة"), style: const TextStyle(fontSize: 16))
           ],
         ),
       ),
@@ -85,31 +122,44 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
   }
 
   void _showEditDialog(String fieldKey) async {
-    final TextEditingController controller = TextEditingController(text: patientData[fieldKey]?.toString() ?? '');
+    // controller initialised with current value
+    final TextEditingController controller =
+    TextEditingController(text: patientData[fieldKey]?.toString() ?? '');
 
+    // Email not editable
     if (fieldKey == "Email") {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Email cannot be updated.")),
+        SnackBar(content: Text(_t("Email cannot be updated.", "لايمكن تعديل البريد الإلكتروني."))),
       );
       return;
     }
 
+    // Date of Birth -> use date picker
     if (fieldKey == "Date of Birth") {
+      final initial = DateTime.tryParse(patientData['Date of Birth'] ?? '') ?? DateTime.now().subtract(const Duration(days: 365 * 20));
       final picked = await showDatePicker(
         context: context,
-        initialDate: DateTime.now().subtract(const Duration(days: 365 * 20)),
+        initialDate: initial,
         firstDate: DateTime(1900),
         lastDate: DateTime.now(),
+        locale: Locale(_isArabic ? 'ar' : 'en'),
       );
       if (picked != null) {
-        final formattedDate = DateFormat('MMMM d, yyyy').format(picked);
-        _updateField(fieldKey, formattedDate);
+        // Save ISO to DB (so it's machine-parseable) and display formatted to user
+        await _updateFieldDb('dateOfBirth', picked.toIso8601String());
+        await _loadUserData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(_t("Date updated", "تم تحديث التاريخ"))),
+          );
+        }
       }
       return;
     }
 
+    // Blood Type -> special dropdown
     if (fieldKey == "Blood Type") {
-      String? selectedBloodType = patientData[fieldKey];
+      String? selectedBloodType = patientData[fieldKey] as String?;
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -118,7 +168,7 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Edit Blood Type"),
+              Text(_t("Edit Blood Type", "تعديل فصيلة الدم")),
               IconButton(
                 icon: const Icon(Icons.close),
                 onPressed: () => Navigator.of(context).pop(),
@@ -130,22 +180,29 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
             children: [
               DropdownButtonFormField<String>(
                 value: (selectedBloodType ?? '').isEmpty ? null : selectedBloodType,
-                items: [
-                  "O+","O-","A+","A-","B+","B-","AB+","AB-"
-                ].map((type) => DropdownMenuItem(value: type, child: Text(type))).toList(),
-                onChanged: (value) => selectedBloodType = value!,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  labelText: "Blood Type",
+                items: ["O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"]
+                    .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                    .toList(),
+                onChanged: (value) => selectedBloodType = value,
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  labelText: _t("Blood Type", "فصيلة الدم"),
                 ),
               ),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     if (selectedBloodType != null) {
-                      _updateField(fieldKey, selectedBloodType!);
+                      await _updateFieldDb('bloodType', selectedBloodType!);
+                      await _loadUserData();
+                      Navigator.of(context).pop(); // close dialog
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(_t("Blood type updated", "تم تعديل فصيلة الدم"))),
+                        );
+                      }
                     }
                   },
                   style: ElevatedButton.styleFrom(
@@ -153,7 +210,7 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text("Update", style: TextStyle(color: Colors.white)),
+                  child: Text(_t("Update", "تحديث"), style: const TextStyle(color: Colors.white)),
                 ),
               ),
             ],
@@ -163,6 +220,7 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
       return;
     }
 
+    // Default text edit dialog
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -171,7 +229,7 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text("Edit $fieldKey"),
+            Text(_t("Edit", "تعديل") + ' ' + _labelForKey(fieldKey)),
             IconButton(
               icon: const Icon(Icons.close),
               onPressed: () => Navigator.of(context).pop(),
@@ -183,11 +241,14 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
           children: [
             TextFormField(
               controller: controller,
-              keyboardType: fieldKey == "Phone Number" || fieldKey == "Emergency Contact" || fieldKey == "National ID"
+              keyboardType: (fieldKey == "Phone Number" ||
+                  fieldKey == "Emergency Contact" ||
+                  fieldKey == "National ID")
                   ? TextInputType.number
                   : TextInputType.text,
+              textAlign: _fieldAlign,
               decoration: InputDecoration(
-                labelText: fieldKey,
+                labelText: _labelForKey(fieldKey),
                 border: const OutlineInputBorder(),
               ),
             ),
@@ -195,16 +256,32 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   final value = controller.text.trim();
-                  _updateField(fieldKey, value);
+                  if (value.isEmpty) {
+                    // small validation
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(_t("Please enter a value", "الرجاء إدخال قيمة"))),
+                    );
+                    return;
+                  }
+                  // Save to DB using mapping
+                  final dbKey = _mapFieldToDBKey(fieldKey);
+                  await _updateFieldDb(dbKey, value);
+                  await _loadUserData();
+                  if (mounted) {
+                    Navigator.of(context).pop(); // close dialog
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(_t("Updated successfully", "تم التحديث بنجاح"))),
+                    );
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purple,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
-                child: const Text("Update", style: TextStyle(color: Colors.white)),
+                child: Text(_t("Update", "تحديث"), style: const TextStyle(color: Colors.white)),
               ),
             )
           ],
@@ -213,12 +290,10 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
     );
   }
 
-  void _updateField(String key, String value) async {
+  // Write single field to DB (dbKey is actual key in 'users' node)
+  Future<void> _updateFieldDb(String dbKey, String value) async {
     if (user == null) return;
-    final dbKey = _mapFieldToDBKey(key);
     await _database.child('users/${user!.uid}/$dbKey').set(value);
-    Navigator.of(context).pop();
-    _loadUserData();
   }
 
   String _mapFieldToDBKey(String field) {
@@ -244,48 +319,92 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
     }
   }
 
+  String _labelForKey(String key) {
+    // Return translated label for display
+    switch (key) {
+      case "Full Name":
+        return _t("Full Name", "الاسم الكامل");
+      case "Email":
+        return _t("Email", "البريد الإلكتروني");
+      case "Phone Number":
+        return _t("Phone Number", "رقم الهاتف");
+      case "National ID":
+        return _t("National ID", "الهوية الوطنية");
+      case "Date of Birth":
+        return _t("Date of Birth", "تاريخ الميلاد");
+      case "Blood Type":
+        return _t("Blood Type", "فصيلة الدم");
+      case "Gender":
+        return _t("Gender", "الجنس");
+      case "Emergency Contact":
+        return _t("Emergency Contact", "جهة الاتصال في حالة الطوارئ");
+      case "Address":
+        return _t("Address", "العنوان");
+      default:
+        return key;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final purple = Colors.purple;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text("My Profile", style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.purple,
+        title: Text(_t("My Profile", "ملفّي"), style: const TextStyle(color: Colors.white)),
+        backgroundColor: purple,
         centerTitle: true,
       ),
       body: patientData.isEmpty
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 12),
+          Text(_t("Loading profile...", "جارٍ تحميل الملف..."))
+        ],
+      ))
           : SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            GestureDetector(
-              onTap: _pickImage,
-              child: CircleAvatar(
-                radius: 50,
-                backgroundColor: Colors.purple,
-                backgroundImage:
-                _profileImage != null ? FileImage(_profileImage!) : null,
-                child: _profileImage == null
-                    ? const Icon(Icons.person, size: 50, color: Colors.white)
-                    : null,
+            // Avatar + edit
+            Center(
+              child: GestureDetector(
+                onTap: _pickImage,
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.purple,
+                  backgroundImage: _profileImage != null ? FileImage(_profileImage!) : null,
+                  child: _profileImage == null
+                      ? const Icon(Icons.person, size: 50, color: Colors.white)
+                      : null,
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  patientData["Full Name"] ?? "",
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.purple),
-                  onPressed: () => _showEditDialog("Full Name"),
-                ),
-              ],
+            // Name + edit icon centered
+            Center(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    patientData["Full Name"] ?? "",
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.purple),
+                    onPressed: () => _showEditDialog("Full Name"),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
+
+            // Fields list
             ...[
               "Email",
               "Phone Number",
@@ -295,26 +414,35 @@ class _PatientProfilePageState extends State<PatientProfilePage> {
               "Gender",
               "Emergency Contact",
               "Address",
-            ].map((key) => Card(
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              elevation: 3,
-              child: ListTile(
-                title: Text(key, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(patientData[key]?.toString() ?? ''),
-                leading: const Icon(Icons.info_outline_rounded, color: Colors.purple),
-                trailing: key != "Email"
-                    ? IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.purple),
-                  onPressed: () => _showEditDialog(key),
-                )
-                    : null,
-              ),
-            )),
+            ].map((key) {
+              final value = patientData[key]?.toString() ?? '';
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 6),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                elevation: 3,
+                child: ListTile(
+                  leading: const Icon(Icons.info_outline_rounded, color: Colors.purple),
+                  title: Text(
+                    _labelForKey(key),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    textAlign: _isArabic ? TextAlign.right : TextAlign.left,
+                  ),
+                  subtitle: Text(
+                    value,
+                    textAlign: _isArabic ? TextAlign.right : TextAlign.left,
+                  ),
+                  trailing: key != "Email"
+                      ? IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.purple),
+                    onPressed: () => _showEditDialog(key),
+                  )
+                      : null,
+                ),
+              );
+            }).toList(),
           ],
         ),
       ),
     );
   }
 }
-
