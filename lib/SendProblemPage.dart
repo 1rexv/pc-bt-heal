@@ -274,7 +274,7 @@ class _SendProblemPageState extends State<SendProblemPage> {
                                 );
                               }).toList(),
                               onChanged: (val) => setState(() => _selectedDoctorId = val),
-                              validator: (v) => v == null ? (isArabic ? 'الرجاء اختيار طبيب' : 'Please select a doctor') : null,
+                              validator: (v) => v == null ? (isArabic ? 'الرجاء اختيار الطبيب' : 'Please select a doctor') : null,
                             ),
 
                             const SizedBox(height: 16),
