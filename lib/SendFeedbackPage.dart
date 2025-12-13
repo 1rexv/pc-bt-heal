@@ -11,8 +11,11 @@ class SendFeedbackPage extends StatefulWidget {
 
 class _SendFeedbackPageState extends State<SendFeedbackPage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController systemFeedbackController = TextEditingController();
-  final TextEditingController doctorFeedbackController = TextEditingController();
+
+  final TextEditingController systemFeedbackController =
+  TextEditingController();
+  final TextEditingController doctorFeedbackController =
+  TextEditingController();
 
   String? selectedDoctorEmail;
   String? selectedDoctorName;
@@ -24,12 +27,12 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
   List<Map<String, String>> doctorsList = [];
 
   bool get isArabic =>
-      Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
+      Localizations.localeOf(context).languageCode.startsWith('ar');
 
   @override
   void initState() {
     super.initState();
-    fetchDoctors();
+    _fetchDoctors();
   }
 
   @override
@@ -39,7 +42,7 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
     super.dispose();
   }
 
-  Future<void> fetchDoctors() async {
+  Future<void> _fetchDoctors() async {
     try {
       final ref = FirebaseDatabase.instance.ref("doctors");
       final snapshot = await ref.get();
@@ -47,10 +50,10 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
       final List<Map<String, String>> loaded = [];
 
       if (snapshot.exists && snapshot.value != null) {
-        final data = snapshot.value as Map;
+        final data = Map<String, dynamic>.from(snapshot.value as Map);
 
         for (final entry in data.entries) {
-          final v = entry.value as Map;
+          final v = Map<String, dynamic>.from(entry.value);
           final enabled = v['enabled'] == true ||
               v['enabled']?.toString().toLowerCase() == 'true';
 
@@ -77,6 +80,7 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
         _loadingDoctors = false;
       });
     } catch (e) {
+      debugPrint('Fetch doctors error: $e');
       _loadingDoctors = false;
     }
   }
@@ -97,7 +101,7 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
         "systemFeedback": systemFeedbackController.text.trim(),
         "rating": rating.round(),
         "patientEmail": user.email,
-        "createdAt": DateTime.now().millisecondsSinceEpoch,
+        "createdAt": ServerValue.timestamp,
       });
 
       if (!mounted) return;
@@ -105,8 +109,9 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isArabic ? 'تم إرسال الملاحظات بنجاح' : 'Feedback sent successfully',
-            textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+            isArabic
+                ? 'تم إرسال الملاحظات بنجاح'
+                : 'Feedback sent successfully',
           ),
         ),
       );
@@ -133,7 +138,9 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
           ),
         ),
         body: _loadingDoctors
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(
+          child: CircularProgressIndicator(color: Colors.purple),
+        )
             : Padding(
           padding: const EdgeInsets.all(20),
           child: Form(
@@ -142,14 +149,20 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
               children: [
                 Text(
                   isArabic ? 'اختر الطبيب' : 'Select Doctor',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
 
+                /// Doctor Dropdown
                 DropdownButtonFormField<String>(
                   value: selectedDoctorEmail,
-                  items: doctorsList.map((doc) {
-                    return DropdownMenuItem(
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                  ),
+                  items: doctorsList
+                      .map<DropdownMenuItem<String>>((doc) {
+                    return DropdownMenuItem<String>(
                       value: doc['email'],
                       child: Text(doc['name']!),
                     );
@@ -158,56 +171,54 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
                     setState(() {
                       selectedDoctorEmail = v;
                       selectedDoctorName = doctorsList
-                          .firstWhere((d) => d['email'] == v)['name'];
+                          .firstWhere(
+                              (d) => d['email'] == v)['name'];
                     });
                   },
                   validator: (v) => v == null
-                      ? (isArabic ? 'اختر الطبيب' : 'Select doctor')
+                      ? (isArabic
+                      ? 'الرجاء اختيار طبيب'
+                      : 'Please select a doctor')
                       : null,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                  ),
                 ),
 
                 const SizedBox(height: 20),
 
-                /// Feedback about doctor (Arabic supported)
+                /// Feedback about Doctor
                 TextFormField(
                   controller: doctorFeedbackController,
                   maxLines: 4,
-                  textDirection:
-                  isArabic ? TextDirection.rtl : TextDirection.ltr,
-                  textAlign:
-                  isArabic ? TextAlign.right : TextAlign.left,
                   decoration: InputDecoration(
                     labelText: isArabic
                         ? 'ملاحظات عن الطبيب'
                         : 'Feedback about Doctor',
                     border: const OutlineInputBorder(),
+                    alignLabelWithHint: true,
                   ),
                   validator: (v) => v == null || v.isEmpty
-                      ? (isArabic ? 'اكتب ملاحظاتك' : 'Enter feedback')
+                      ? (isArabic
+                      ? 'الرجاء كتابة ملاحظاتك'
+                      : 'Please enter your feedback')
                       : null,
                 ),
 
                 const SizedBox(height: 20),
 
-                /// Feedback about system (Arabic supported)
+                /// Feedback about System
                 TextFormField(
                   controller: systemFeedbackController,
                   maxLines: 4,
-                  textDirection:
-                  isArabic ? TextDirection.rtl : TextDirection.ltr,
-                  textAlign:
-                  isArabic ? TextAlign.right : TextAlign.left,
                   decoration: InputDecoration(
                     labelText: isArabic
                         ? 'ملاحظات عن النظام'
                         : 'Feedback about the System',
                     border: const OutlineInputBorder(),
+                    alignLabelWithHint: true,
                   ),
                   validator: (v) => v == null || v.isEmpty
-                      ? (isArabic ? 'اكتب ملاحظاتك' : 'Enter feedback')
+                      ? (isArabic
+                      ? 'الرجاء كتابة ملاحظاتك'
+                      : 'Please enter your feedback')
                       : null,
                 ),
 
@@ -217,7 +228,8 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
                   isArabic
                       ? 'قيّم تجربتك (1 - 5)'
                       : 'Rate your experience (1 - 5)',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold),
                 ),
 
                 Slider(
@@ -233,10 +245,12 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
                 const SizedBox(height: 30),
 
                 ElevatedButton(
-                  onPressed: _isSubmitting ? null : _submitFeedback,
+                  onPressed:
+                  _isSubmitting ? null : _submitFeedback,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.purple,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding:
+                    const EdgeInsets.symmetric(vertical: 14),
                   ),
                   child: _isSubmitting
                       ? const CircularProgressIndicator(
@@ -244,7 +258,8 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
                   )
                       : Text(
                     isArabic ? 'إرسال' : 'Submit',
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(
+                        color: Colors.white),
                   ),
                 ),
               ],
