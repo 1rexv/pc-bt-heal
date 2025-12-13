@@ -38,60 +38,48 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
     "متى أحتاج استشارة طبيب أونلاين؟",
   ];
 
+  bool get isArabic =>
+      Localizations.localeOf(context).languageCode.startsWith('ar');
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
     if (!_greetingInitialized) {
-      final isArabic = Localizations.localeOf(context)
-          .languageCode
-          .toLowerCase()
-          .startsWith('ar');
+      _addBotMessage(
+        isArabic
+            ? "🤖 مساعد HEAL\n\n"
+            "مرحبًا بك! يمكنك كتابة سؤالك باللغة العربية أو الإنجليزية.\n"
+            "أنا أساعد فقط في مواضيع الحمل، الصحة، والأدوية.\n\n"
+            "⚠️ لا أقدّم تشخيصًا طبيًا."
+            : "🤖 HEAL Assistant\n\n"
+            "Welcome! You can ask in Arabic or English.\n"
+            "I help with pregnancy, health, and medications only.\n\n"
+            "⚠️ I do not provide medical diagnosis.",
+      );
 
-      final greeting = isArabic
-          ? "🤖 مساعد HEAL\n\n"
-          "مرحبًا بك! أنا هنا لمساعدتك في مواضيع الحمل، الصحة، والأدوية فقط.\n"
-          "يمكنك كتابة الأعراض أو اختيار أحد الأسئلة السريعة.\n\n"
-          "⚠️ لا أقدّم تشخيصًا طبيًا أو وصفات علاجية. اتبعي نصائح طبيبك دائمًا."
-          : "🤖 HEAL Assistant\n\n"
-          "Welcome! I’m here to help you with pregnancy, health, and medications only.\n"
-          "You can type your symptoms or choose one of the quick questions.\n\n"
-          "⚠️ I cannot diagnose or prescribe. Always follow your doctor’s advice.";
-
-      _addBotMessage(greeting);
       _greetingInitialized = true;
     }
   }
 
   void _addBotMessage(String text) {
     setState(() {
-      _messages.add({
-        "sender": "bot",
-        "message": text,
-      });
+      _messages.add({"sender": "bot", "message": text});
     });
   }
 
   void _addUserMessage(String text) {
     setState(() {
-      _messages.add({
-        "sender": "user",
-        "message": text,
-      });
+      _messages.add({"sender": "user", "message": text});
     });
   }
 
   Future<void> _sendMessage([String? preset]) async {
-    final isArabic = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('ar');
-
-    final userMessage = (preset ?? _controller.text).trim();
-    if (userMessage.isEmpty || _isSending) return;
+    final message = (preset ?? _controller.text).trim();
+    if (message.isEmpty || _isSending) return;
 
     _controller.clear();
-    _addUserMessage(userMessage);
+    _addUserMessage(message);
     setState(() => _isSending = true);
 
     try {
@@ -103,98 +91,55 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
       })
           .toList();
 
-      final url = Uri.parse("http://10.0.2.2:8080/health-chat");
-
-      const modeString = "faq";
-
       final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
+        Uri.parse("http://10.0.2.2:8080/health-chat"),
+        headers: {"Content-Type": "application/json; charset=utf-8"},
         body: jsonEncode({
-          "mode": modeString,
-          "message": userMessage,
+          "message": message,
+          "language": isArabic ? "ar" : "en", // ✅ دعم اللغة
           "history": history,
         }),
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final botReply = data["reply"] as String? ??
-            (isArabic
-                ? "عذرًا، لم أتمكن من توليد رد. حاول مرة أخرى."
-                : "Sorry, I could not generate a response.");
-        _addBotMessage(botReply);
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        _addBotMessage(data["reply"] ?? "—");
       } else {
         _addBotMessage(isArabic
-            ? "عذرًا، لا يمكن الوصول إلى خادم HEAL (خطأ ${response.statusCode})."
-            : "Sorry, I could not reach the HEAL server (error ${response.statusCode}).");
+            ? "تعذر الاتصال بالخادم."
+            : "Could not connect to server.");
       }
-    } catch (e) {
+    } catch (_) {
       _addBotMessage(isArabic
-          ? "حدثت مشكلة في الاتصال بخادم HEAL. الرجاء المحاولة لاحقًا."
-          : "There was a problem connecting to the HEAL backend. Please try again.");
+          ? "حدث خطأ في الاتصال."
+          : "Connection error.");
     } finally {
       setState(() => _isSending = false);
     }
   }
 
-  Widget _buildBotBubble(String text, bool isArabic) {
+  Widget _bubble({
+    required String text,
+    required bool isUser,
+  }) {
     return Align(
-      alignment: Alignment.centerLeft,
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.all(14),
+        constraints: const BoxConstraints(maxWidth: 280),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.purple.shade100,
-              child: const Icon(Icons.health_and_safety,
-                  size: 18, color: Colors.purple),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: const TextStyle(fontSize: 14, height: 1.4),
-                textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUserBubble(String text, bool isArabic) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.purple,
+          color: isUser ? Colors.purple : Colors.white,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Text(
           text,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-          ),
           textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+          textAlign: isArabic ? TextAlign.right : TextAlign.left,
+          style: TextStyle(
+            color: isUser ? Colors.white : Colors.black87,
+            height: 1.4,
+          ),
         ),
       ),
     );
@@ -202,199 +147,81 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isArabic = Localizations.localeOf(context)
-        .languageCode
-        .toLowerCase()
-        .startsWith('ar');
-
     final questions = isArabic ? _questionsAr : _questionsEn;
-    final background = const Color(0xFFF7F1FF);
-
-    final quickTitle = isArabic ? "أسئلة سريعة" : "Quick Questions";
-    final hintText =
-    isArabic ? "اكتبي الأعراض أو سؤالك هنا..." : "Type your symptoms or question...";
-    final appBarTitle = isArabic ? "مساعد شات الشفاء" : "HEAL Chatbot";
 
     return Scaffold(
-      backgroundColor: background,
+      backgroundColor: const Color(0xFFF7F1FF),
       appBar: AppBar(
-        title: Text(
-          appBarTitle,
-          style: const TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.purple,
+        title: Text(isArabic ? "مساعد HEAL" : "HEAL Assistant"),
         centerTitle: true,
-        elevation: 0,
+        backgroundColor: Colors.purple,
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Container(
-                      color: Colors.white,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, index) {
-                          final msg = _messages[index];
-                          final isUser = msg['sender'] == "user";
-                          return isUser
-                              ? _buildUserBubble(msg['message'] as String, isArabic)
-                              : _buildBotBubble(msg['message'] as String, isArabic);
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (_, i) {
+                final m = _messages[i];
+                return _bubble(
+                  text: m["message"],
+                  isUser: m["sender"] == "user",
+                );
+              },
             ),
+          ),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              child: Card(
-                elevation: 1,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+          /// الأسئلة السريعة
+          ExpansionTile(
+            title: Text(isArabic ? "أسئلة سريعة" : "Quick Questions"),
+            children: questions
+                .map(
+                  (q) => ListTile(
+                title: Text(
+                  q,
+                  textAlign:
+                  isArabic ? TextAlign.right : TextAlign.left,
                 ),
-                child: Theme(
-                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                  child: ExpansionTile(
-                    initiallyExpanded: false,
-                    onExpansionChanged: (expanded) {
-                      setState(() => _quickExpanded = expanded);
-                    },
-                    title: Text(
-                      quickTitle,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      textAlign: isArabic ? TextAlign.right : TextAlign.left,
-                    ),
-                    trailing: Icon(
-                      _quickExpanded
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.keyboard_arrow_down_rounded,
-                      color: Colors.purple,
-                    ),
-                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    children: [
-                      Column(
-                        crossAxisAlignment:
-                        isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                        children: questions.map((q) {
-                          return InkWell(
-                            onTap: () => _sendMessage(q),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Row(
-                                mainAxisAlignment:
-                                isArabic ? MainAxisAlignment.end : MainAxisAlignment.start,
-                                children: [
-                                  if (!isArabic)
-                                    Text(
-                                      "• ",
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        color: Colors.purple.shade600,
-                                      ),
-                                    ),
-                                  Expanded(
-                                    child: Text(
-                                      q,
-                                      textAlign: isArabic ? TextAlign.right : TextAlign.left,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: Colors.black87,
-                                        height: 1.4,
-                                      ),
-                                    ),
-                                  ),
-                                  if (isArabic)
-                                    Text(
-                                      " •",
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        color: Colors.purple.shade600,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
-                ),
+                onTap: () => _sendMessage(q),
               ),
-            ),
+            )
+                .toList(),
+          ),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
+          /// الإدخال
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    textDirection:
+                    isArabic ? TextDirection.rtl : TextDirection.ltr,
+                    decoration: InputDecoration(
+                      hintText: isArabic
+                          ? "اكتبي سؤالك هنا..."
+                          : "Type your question...",
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: TextField(
-                        controller: _controller,
-                        textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-                        decoration: InputDecoration(
-                          hintText: hintText,
-                          contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          border: InputBorder.none,
-                        ),
-                        onSubmitted: (_) => _sendMessage(),
+                        borderSide: BorderSide.none,
                       ),
                     ),
+                    onSubmitted: (_) => _sendMessage(),
                   ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    height: 44,
-                    width: 44,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        backgroundColor: Colors.purple,
-                        shape: const CircleBorder(),
-                        elevation: 3,
-                      ),
-                      onPressed: _isSending ? null : _sendMessage,
-                      child: _isSending
-                          ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                          : const Icon(Icons.send, size: 20, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.send, color: Colors.purple),
+                  onPressed: _isSending ? null : _sendMessage,
+                )
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
