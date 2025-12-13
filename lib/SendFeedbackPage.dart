@@ -23,27 +23,8 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
 
   List<Map<String, String>> doctorsList = [];
 
-
-  Future<void> fetchDoctors() async {
-    final ref = FirebaseDatabase.instance.ref("doctors");
-
-    final snapshot = await ref.get();
-
-    if (snapshot.exists) {
-      final data = snapshot.value as Map;
-
-      doctorsList = data.entries
-          .map((e) => {
-        "email": e.value["email"].toString(),
-        "name": e.value["fullName"].toString(),
-        "enabled": e.value["enabled"].toString(),
-      })
-          .where((doc) => doc["enabled"] == "true")
-          .toList();
-    }
-
-    setState(() => _loadingDoctors = false);
-  }
+  bool get isArabic =>
+      Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
 
   @override
   void initState() {
@@ -51,161 +32,223 @@ class _SendFeedbackPageState extends State<SendFeedbackPage> {
     fetchDoctors();
   }
 
+  @override
+  void dispose() {
+    systemFeedbackController.dispose();
+    doctorFeedbackController.dispose();
+    super.dispose();
+  }
+
+  Future<void> fetchDoctors() async {
+    try {
+      final ref = FirebaseDatabase.instance.ref("doctors");
+      final snapshot = await ref.get();
+
+      final List<Map<String, String>> loaded = [];
+
+      if (snapshot.exists && snapshot.value != null) {
+        final data = snapshot.value as Map;
+
+        for (final entry in data.entries) {
+          final v = entry.value as Map;
+          final enabled = v['enabled'] == true ||
+              v['enabled']?.toString().toLowerCase() == 'true';
+
+          if (!enabled) continue;
+
+          final email = (v['email'] ?? '').toString();
+          final name = (v['fullName'] ?? '').toString();
+
+          if (email.isEmpty) continue;
+
+          loaded.add({
+            'email': email,
+            'name': name.isEmpty ? email : name,
+          });
+        }
+      }
+
+      setState(() {
+        doctorsList = loaded;
+        if (doctorsList.isNotEmpty) {
+          selectedDoctorEmail = doctorsList.first['email'];
+          selectedDoctorName = doctorsList.first['name'];
+        }
+        _loadingDoctors = false;
+      });
+    } catch (e) {
+      _loadingDoctors = false;
+    }
+  }
 
   Future<void> _submitFeedback() async {
     if (!_formKey.currentState!.validate()) return;
 
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.email == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("You must be logged in.")),
-      );
-      return;
-    }
+    if (user == null) return;
 
     setState(() => _isSubmitting = true);
 
     try {
-      final ref = FirebaseDatabase.instance.ref("feedback").push();
-
-      await ref.set({
-        "doctorEmail": selectedDoctorEmail,     
-        "doctorName": selectedDoctorName,      
+      await FirebaseDatabase.instance.ref("feedback").push().set({
+        "doctorEmail": selectedDoctorEmail,
+        "doctorName": selectedDoctorName,
         "doctorFeedback": doctorFeedbackController.text.trim(),
         "systemFeedback": systemFeedbackController.text.trim(),
-        "rating": rating,
+        "rating": rating.round(),
         "patientEmail": user.email,
         "createdAt": DateTime.now().millisecondsSinceEpoch,
       });
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Feedback sent successfully!")),
+        SnackBar(
+          content: Text(
+            isArabic ? 'تم إرسال الملاحظات بنجاح' : 'Feedback sent successfully',
+            textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+          ),
+        ),
       );
 
-      setState(() {
-        selectedDoctorEmail = null;
-        selectedDoctorName = null;
-        doctorFeedbackController.clear();
-        systemFeedbackController.clear();
-        rating = 3;
-      });
-
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error sending: $e")),
-      );
+      doctorFeedbackController.clear();
+      systemFeedbackController.clear();
+      rating = 3;
     } finally {
-      setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final purple = Colors.purple;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Send Feedback", style: TextStyle(color: Colors.white)),
-        centerTitle: true,
-        backgroundColor: purple,
-      ),
-      body: _loadingDoctors
-          ? const Center(
-        child: CircularProgressIndicator(color: Colors.purple),
-      )
-          : Padding(
-        padding: const EdgeInsets.all(20),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              const Text(
-                "Select Doctor",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-
-              DropdownButtonFormField<String>(
-                value: selectedDoctorEmail,
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
+    return Directionality(
+      textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.purple,
+          centerTitle: true,
+          title: Text(
+            isArabic ? 'إرسال ملاحظات' : 'Send Feedback',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+        body: _loadingDoctors
+            ? const Center(child: CircularProgressIndicator())
+            : Padding(
+          padding: const EdgeInsets.all(20),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              children: [
+                Text(
+                  isArabic ? 'اختر الطبيب' : 'Select Doctor',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                items: doctorsList.map((doc) {
-                  return DropdownMenuItem(
-                    value: doc["email"],
-                    child: Text("${doc['name']}  (${doc['email']})"),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    selectedDoctorEmail = value;
-                    selectedDoctorName = doctorsList
-                        .firstWhere((d) => d["email"] == value)["name"];
-                  });
-                },
-                validator: (value) =>
-                value == null ? "Please select a doctor" : null,
-              ),
+                const SizedBox(height: 8),
 
-              const SizedBox(height: 20),
-
-              // Doctor feedback
-              TextFormField(
-                controller: doctorFeedbackController,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: "Feedback about Doctor",
-                  border: OutlineInputBorder(),
+                DropdownButtonFormField<String>(
+                  value: selectedDoctorEmail,
+                  items: doctorsList.map((doc) {
+                    return DropdownMenuItem(
+                      value: doc['email'],
+                      child: Text(doc['name']!),
+                    );
+                  }).toList(),
+                  onChanged: (v) {
+                    setState(() {
+                      selectedDoctorEmail = v;
+                      selectedDoctorName = doctorsList
+                          .firstWhere((d) => d['email'] == v)['name'];
+                    });
+                  },
+                  validator: (v) => v == null
+                      ? (isArabic ? 'اختر الطبيب' : 'Select doctor')
+                      : null,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-                validator: (value) =>
-                value == null || value.isEmpty ? "Enter feedback" : null,
-              ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // System feedback
-              TextFormField(
-                controller: systemFeedbackController,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: "Feedback about the System",
-                  border: OutlineInputBorder(),
+                /// Feedback about doctor (Arabic supported)
+                TextFormField(
+                  controller: doctorFeedbackController,
+                  maxLines: 4,
+                  textDirection:
+                  isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  textAlign:
+                  isArabic ? TextAlign.right : TextAlign.left,
+                  decoration: InputDecoration(
+                    labelText: isArabic
+                        ? 'ملاحظات عن الطبيب'
+                        : 'Feedback about Doctor',
+                    border: const OutlineInputBorder(),
+                  ),
+                  validator: (v) => v == null || v.isEmpty
+                      ? (isArabic ? 'اكتب ملاحظاتك' : 'Enter feedback')
+                      : null,
                 ),
-                validator: (value) =>
-                value == null || value.isEmpty ? "Enter system feedback" : null,
-              ),
 
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              const Text(
-                "Rate your experience (1-5 stars)",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-
-              Slider(
-                value: rating,
-                min: 1,
-                max: 5,
-                divisions: 4,
-                label: rating.toStringAsFixed(0),
-                activeColor: purple,
-                onChanged: (v) => setState(() => rating = v),
-              ),
-
-              const SizedBox(height: 30),
-
-              ElevatedButton(
-                onPressed: _isSubmitting ? null : _submitFeedback,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: purple,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                /// Feedback about system (Arabic supported)
+                TextFormField(
+                  controller: systemFeedbackController,
+                  maxLines: 4,
+                  textDirection:
+                  isArabic ? TextDirection.rtl : TextDirection.ltr,
+                  textAlign:
+                  isArabic ? TextAlign.right : TextAlign.left,
+                  decoration: InputDecoration(
+                    labelText: isArabic
+                        ? 'ملاحظات عن النظام'
+                        : 'Feedback about the System',
+                    border: const OutlineInputBorder(),
+                  ),
+                  validator: (v) => v == null || v.isEmpty
+                      ? (isArabic ? 'اكتب ملاحظاتك' : 'Enter feedback')
+                      : null,
                 ),
-                child: _isSubmitting
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Submit Feedback",
-                    style: TextStyle(color: Colors.white)),
-              )
-            ],
+
+                const SizedBox(height: 20),
+
+                Text(
+                  isArabic
+                      ? 'قيّم تجربتك (1 - 5)'
+                      : 'Rate your experience (1 - 5)',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+
+                Slider(
+                  value: rating,
+                  min: 1,
+                  max: 5,
+                  divisions: 4,
+                  label: rating.round().toString(),
+                  activeColor: Colors.purple,
+                  onChanged: (v) => setState(() => rating = v),
+                ),
+
+                const SizedBox(height: 30),
+
+                ElevatedButton(
+                  onPressed: _isSubmitting ? null : _submitFeedback,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: _isSubmitting
+                      ? const CircularProgressIndicator(
+                    color: Colors.white,
+                  )
+                      : Text(
+                    isArabic ? 'إرسال' : 'Submit',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
