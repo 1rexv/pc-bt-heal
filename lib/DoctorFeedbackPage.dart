@@ -13,20 +13,35 @@ class _DoctorFeedbackPageState extends State<DoctorFeedbackPage> {
   final TextEditingController _feedbackController = TextEditingController();
   bool _isSubmitting = false;
 
+  bool get isArabic =>
+      Localizations.localeOf(context).languageCode.startsWith('ar');
+
   Future<void> _submitFeedback() async {
     final feedback = _feedbackController.text.trim();
     final user = FirebaseAuth.instance.currentUser;
 
     if (feedback.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your feedback')),
+        SnackBar(
+          content: Text(
+            isArabic
+                ? 'الرجاء كتابة ملاحظاتك'
+                : 'Please enter your feedback',
+          ),
+        ),
       );
       return;
     }
 
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be logged in')),
+        SnackBar(
+          content: Text(
+            isArabic
+                ? 'يجب تسجيل الدخول أولاً'
+                : 'You must be logged in',
+          ),
+        ),
       );
       return;
     }
@@ -44,16 +59,15 @@ class _DoctorFeedbackPageState extends State<DoctorFeedbackPage> {
       final DataSnapshot doctorSnapshot = await doctorRef.get();
 
       if (doctorSnapshot.exists && doctorSnapshot.value is Map) {
-        final data = Map<String, dynamic>.from(
-            doctorSnapshot.value as Map);
+        final data =
+        Map<String, dynamic>.from(doctorSnapshot.value as Map);
 
-        if (data['email'] != null && (data['email'] as String).isNotEmpty) {
-          doctorEmail = data['email'] as String;
+        if ((data['email'] ?? '').toString().isNotEmpty) {
+          doctorEmail = data['email'];
         }
 
-        if (data['fullName'] != null &&
-            (data['fullName'] as String).isNotEmpty) {
-          doctorName = data['fullName'] as String;
+        if ((data['fullName'] ?? '').toString().isNotEmpty) {
+          doctorName = data['fullName'];
         }
       }
 
@@ -68,17 +82,31 @@ class _DoctorFeedbackPageState extends State<DoctorFeedbackPage> {
         "createdAt": ServerValue.timestamp,
       });
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Feedback submitted successfully')),
+        SnackBar(
+          content: Text(
+            isArabic
+                ? 'تم إرسال الملاحظات بنجاح'
+                : 'Feedback submitted successfully',
+          ),
+        ),
       );
 
       _feedbackController.clear();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
+        SnackBar(
+          content: Text(
+            isArabic
+                ? 'حدث خطأ: $e'
+                : 'Error: $e',
+          ),
+        ),
       );
     } finally {
-      setState(() => _isSubmitting = false);
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -86,62 +114,76 @@ class _DoctorFeedbackPageState extends State<DoctorFeedbackPage> {
   Widget build(BuildContext context) {
     final purple = Colors.purple;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Doctor System Feedback',
-          style: TextStyle(color: Colors.white),
+    return Directionality(
+      textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            isArabic
+                ? 'ملاحظات الطبيب عن النظام'
+                : 'Doctor System Feedback',
+            style: const TextStyle(color: Colors.white),
+          ),
+          backgroundColor: purple,
+          centerTitle: true,
         ),
-        backgroundColor: purple,
-        centerTitle: true,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'We value your input!',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _feedbackController,
-              maxLines: 6,
-              decoration: InputDecoration(
-                hintText: 'Write your feedback about the system...',
-                border:
-                OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isArabic
+                    ? 'نقدّر ملاحظاتك لتحسين النظام'
+                    : 'We value your input!',
+                style:
+                const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-            ),
-            const SizedBox(height: 16),
-            Center(
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: purple,
-                  foregroundColor: Colors.white,
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: _isSubmitting
-                    ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
+              const SizedBox(height: 12),
+              TextField(
+                controller: _feedbackController,
+                maxLines: 6,
+                decoration: InputDecoration(
+                  hintText: isArabic
+                      ? 'اكتب ملاحظاتك حول النظام...'
+                      : 'Write your feedback about the system...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                )
-                    : const Icon(Icons.send),
-                label: Text(
-                  _isSubmitting ? "Submitting..." : "Submit Feedback",
                 ),
-                onPressed: _isSubmitting ? null : _submitFeedback,
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              Center(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: purple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                      : const Icon(Icons.send),
+                  label: Text(
+                    _isSubmitting
+                        ? (isArabic ? 'جاري الإرسال...' : 'Submitting...')
+                        : (isArabic ? 'إرسال الملاحظات' : 'Submit Feedback'),
+                  ),
+                  onPressed: _isSubmitting ? null : _submitFeedback,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
