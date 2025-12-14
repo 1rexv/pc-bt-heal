@@ -1,8 +1,9 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import 'DoctorForgotPasswordPage.dart';
 import 'DoctorDashboardPage.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'AddOrUpdateDoctorPage.dart';
 import 'main.dart';
 
@@ -15,8 +16,8 @@ class DoctorLoginPage extends StatefulWidget {
 
 class _DoctorLoginPageState extends State<DoctorLoginPage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
 
   bool get isArabic =>
       Localizations.localeOf(context).languageCode.startsWith('ar');
@@ -37,18 +38,18 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
       child: Scaffold(
         appBar: AppBar(
           backgroundColor: Colors.purple,
+          centerTitle: true,
           title: Text(
             t("Doctor Login", "تسجيل دخول الطبيب"),
             style: const TextStyle(color: Colors.white),
           ),
-          centerTitle: true,
         ),
         body: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(vertical: 24),
             child: Container(
-              padding: const EdgeInsets.all(20),
               margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -68,23 +69,21 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
                     const Image(
                       image: AssetImage('images/logo.png'),
                       height: 120,
-                      width: 120,
                     ),
                     const SizedBox(height: 24),
 
                     Text(
                       t("Doctor Login", "تسجيل دخول الطبيب"),
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Colors.purple,
                       ),
-                      textAlign: TextAlign.center,
                     ),
-
                     const SizedBox(height: 24),
 
-                    
+                    /// Email
                     TextFormField(
                       controller: emailController,
                       keyboardType: TextInputType.emailAddress,
@@ -93,17 +92,17 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
                         border: const OutlineInputBorder(),
                         labelText: t("Email", "البريد الإلكتروني"),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
                           return t(
                             "Please enter your email",
                             "الرجاء إدخال البريد الإلكتروني",
                           );
-                        } else if (!value.contains('@') ||
-                            !value.contains('.')) {
+                        }
+                        if (!v.contains('@')) {
                           return t(
-                            "Please enter a valid email",
-                            "الرجاء إدخال بريد إلكتروني صحيح",
+                            "Enter a valid email",
+                            "أدخل بريد إلكتروني صحيح",
                           );
                         }
                         return null;
@@ -111,7 +110,7 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    
+                    /// Password
                     TextFormField(
                       controller: passwordController,
                       obscureText: true,
@@ -120,29 +119,27 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
                         border: const OutlineInputBorder(),
                         labelText: t("Password", "كلمة المرور"),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return t(
-                            "Please enter your password",
-                            "الرجاء إدخال كلمة المرور",
-                          );
-                        }
-                        return null;
-                      },
+                      validator: (v) =>
+                      v == null || v.isEmpty
+                          ? t(
+                        "Please enter your password",
+                        "الرجاء إدخال كلمة المرور",
+                      )
+                          : null,
                     ),
-                    const SizedBox(height: 8),
 
-                    
+                    /// Forgot Password
                     Align(
-                      alignment:
-                      isArabic ? Alignment.centerLeft : Alignment.centerRight,
+                      alignment: isArabic
+                          ? Alignment.centerLeft
+                          : Alignment.centerRight,
                       child: TextButton(
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
                               builder: (_) =>
-                              const DoctorForgotPasswordPage(),
+                                  DoctorForgotPasswordPage(isArabic: isArabic),
                             ),
                           );
                         },
@@ -153,17 +150,15 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
                     ),
                     const SizedBox(height: 16),
 
-                    
+                    /// Login Button
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: _login,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.purple,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                          padding:
+                          const EdgeInsets.symmetric(vertical: 14),
                         ),
                         child: Text(
                           t("Login", "تسجيل الدخول"),
@@ -172,23 +167,22 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 16),
 
-                    
+                    /// Register
                     TextButton(
                       onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const AddOrUpdateDoctorPage(),
+                            builder: (_) =>
+                            const AddOrUpdateDoctorPage(),
                           ),
                         );
                       },
                       child: Text(
-                        t(
-                          "Register as New Doctor",
-                          "تسجيل طبيب جديد",
-                        ),
+                        t("Register as New Doctor", "تسجيل طبيب جديد"),
                       ),
                     ),
                   ],
@@ -198,7 +192,7 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
           ),
         ),
 
-        
+        /// Back
         floatingActionButton: FloatingActionButton(
           backgroundColor: Colors.purple,
           onPressed: () {
@@ -207,10 +201,10 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
               MaterialPageRoute(
                 builder: (_) => HealSystem(
                   title: 'Heal System',
-                  onThemeChanged: (_) {},
-                  onLanguageChanged: (_) {},
                   currentLanguage: isArabic ? 'Arabic' : 'English',
                   isDarkMode: false,
+                  onThemeChanged: (_) {},
+                  onLanguageChanged: (_) {},
                 ),
               ),
             );
@@ -221,77 +215,59 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
     );
   }
 
- 
   void _login() async {
     if (!_formKey.currentState!.validate()) return;
 
-    String email = emailController.text.trim();
-    String password = passwordController.text.trim();
-
     try {
-      UserCredential userCredential = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(email: email, password: password);
+      final cred = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      );
 
-      User? user = userCredential.user;
+      final user = cred.user;
+      if (user == null) return;
 
-      if (user != null) {
-        final ref =
-        FirebaseDatabase.instance.ref("doctors").child(user.uid);
-        final snapshot = await ref.get();
+      final ref =
+      FirebaseDatabase.instance.ref("doctors/${user.uid}");
+      final snapshot = await ref.get();
 
-        if (snapshot.exists) {
-          final data = snapshot.value as Map<dynamic, dynamic>;
-          bool enabled = data['enabled'] == true;
-
-          if (!enabled) {
-            await FirebaseAuth.instance.signOut();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  t(
-                    "Sorry, your account is disabled.",
-                    "عذرًا، تم تعطيل حسابك.",
-                  ),
-                ),
-              ),
-            );
-            return;
-          }
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                t("Login successful!", "تم تسجيل الدخول بنجاح"),
-              ),
+      if (!snapshot.exists) {
+        await FirebaseAuth.instance.signOut();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              t("Access denied", "غير مصرح بالدخول"),
             ),
-          );
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const DoctorDashboardPage(),
-            ),
-          );
-        } else {
-          await FirebaseAuth.instance.signOut();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                t(
-                  "Access denied. Not a doctor.",
-                  "غير مصرح لك بالدخول كطبيب.",
-                ),
-              ),
-            ),
-          );
-        }
+          ),
+        );
+        return;
       }
-    } on FirebaseAuthException catch (e) {
+
+      final data = snapshot.value as Map;
+      if (data['enabled'] != true) {
+        await FirebaseAuth.instance.signOut();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              t("Account disabled", "الحساب معطل"),
+            ),
+          ),
+        );
+        return;
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const DoctorDashboardPage(),
+        ),
+      );
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            e.message ??
-                t("Login failed", "فشل تسجيل الدخول"),
+            t("Login failed", "فشل تسجيل الدخول"),
           ),
         ),
       );
