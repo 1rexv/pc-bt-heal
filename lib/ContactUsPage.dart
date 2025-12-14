@@ -1,270 +1,177 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class ClinicHospitalPage extends StatefulWidget {
-  const ClinicHospitalPage({super.key});
+class ContactUsPage extends StatelessWidget {
+  final String currentLanguage; // "ar" or "en"
 
-  @override
-  State<ClinicHospitalPage> createState() => _ClinicHospitalPageState();
-}
+  const ContactUsPage({super.key, required this.currentLanguage});
 
-class _ClinicHospitalPageState extends State<ClinicHospitalPage> {
-  GoogleMapController? _mapController;
-  final DatabaseReference _doctorsRef =
-  FirebaseDatabase.instance.ref().child("doctors");
+  static final Uri _instagramUri =
+  Uri.parse('https://www.instagram.com/omanimoh/?hl=ar');
 
-  // store loaded doctors to use in bottom sheet
-  final Map<String, Map<String, dynamic>> _doctorsMap = {};
-  Set<Marker> _markers = {};
-  bool _isLoading = true;
-  LatLng _initialPosition = const LatLng(23.5859, 58.4059); // Default Oman location
+  static final Uri _linkedInUri =
+  Uri.parse('https://www.linkedin.com/in/reem-alrawahi-35758b35a');
 
-  @override
-  void initState() {
-    super.initState();
-    _loadDoctorLocations();
-  }
-
-  Future<void> _loadDoctorLocations() async {
+  Future<void> _openExternal(BuildContext context, Uri uri) async {
     try {
-      final snapshot = await _doctorsRef.get();
-
-      if (snapshot.exists) {
-        final data = Map<String, dynamic>.from(snapshot.value as Map);
-
-        Set<Marker> loadedMarkers = {};
-        final Map<String, Map<String, dynamic>> loadedDoctors = {};
-
-        data.forEach((key, value) {
-          final doctor = Map<String, dynamic>.from(value);
-
-          final lat = doctor['location']?['lat'];
-          final lng = doctor['location']?['lng'];
-
-          if (lat != null && lng != null) {
-            final position = LatLng(
-              double.parse(lat.toString()),
-              double.parse(lng.toString()),
-            );
-
-            loadedDoctors[key] = doctor;
-
-            loadedMarkers.add(
-              Marker(
-                markerId: MarkerId(key),
-                position: position,
-                infoWindow: InfoWindow(
-                  title: (doctor['fullName'] ?? 'Doctor').toString(),
-                  snippet: (doctor['description'] ?? '').toString(),
-                ),
-                icon: BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueViolet),
-                onTap: () {
-                  // show bottom sheet with details
-                  _onMarkerTapped(key);
-                },
-              ),
-            );
-          }
-        });
-
-        setState(() {
-          _doctorsMap.clear();
-          _doctorsMap.addAll(loadedDoctors);
-
-          _markers = loadedMarkers;
-          if (loadedMarkers.isNotEmpty) {
-            _initialPosition = loadedMarkers.first.position;
-          }
-          _isLoading = false;
-        });
-      } else {
-        setState(() => _isLoading = false);
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok) {
+        _showSnack(context, currentLanguage == "ar"
+            ? 'تعذر فتح الرابط'
+            : 'Could not open the link');
       }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      debugPrint("❌ Error loading doctor locations: $e");
+    } catch (_) {
+      _showSnack(context, currentLanguage == "ar"
+          ? 'تعذر فتح الرابط'
+          : 'Could not open the link');
     }
   }
 
-  Future<void> _onMarkerTapped(String doctorId) async {
-    final doctor = _doctorsMap[doctorId];
-    if (doctor == null) return;
-
-    final isArabic =
-    Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
-
-    final name = (isArabic && (doctor['fullNameAr'] ?? '').toString().isNotEmpty)
-        ? doctor['fullNameAr']
-        : (doctor['fullName'] ?? (isArabic ? 'طبيب' : 'Doctor'));
-
-    final address = (isArabic && (doctor['addressAr'] ?? '').toString().isNotEmpty)
-        ? doctor['addressAr']
-        : (doctor['address'] ?? (isArabic ? 'العنوان غير متوفر' : 'Address not available'));
-
-    final description = (isArabic && (doctor['descriptionAr'] ?? '').toString().isNotEmpty)
-        ? doctor['descriptionAr']
-        : (doctor['description'] ?? '');
-
-    final lat = doctor['location']?['lat'];
-    final lng = doctor['location']?['lng'];
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: false,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        return Directionality(
-          textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment:
-              isArabic ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name ?? '',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.purple,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.location_on, size: 16, color: Colors.purple),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        address ?? '',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                ),
-                if ((description ?? '').toString().isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    description,
-                    style: const TextStyle(color: Colors.black87),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.directions),
-                        label: Text(isArabic ? 'الاتجاهات' : 'Get Directions'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.purple,
-                        ),
-                        onPressed: (lat != null && lng != null)
-                            ? () {
-                          _openMaps(double.parse(lat.toString()),
-                              double.parse(lng.toString()));
-                        }
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.close),
-                      label: Text(isArabic ? 'إغلاق' : 'Close'),
-                      style:
-                      ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-              ],
-            ),
-          ),
-        );
-      },
+  void _showSnack(BuildContext context, String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
     );
-  }
-
-  Future<void> _openMaps(double lat, double lng) async {
-    final googleUrl = Uri.parse('google.navigation:q=$lat,$lng&mode=d');
-    final appleUrl = Uri.parse('http://maps.apple.com/?daddr=$lat,$lng');
-
-    if (await canLaunchUrl(googleUrl)) {
-      await launchUrl(googleUrl);
-    } else if (await canLaunchUrl(appleUrl)) {
-      await launchUrl(appleUrl);
-    } else {
-      // last resort open geo:
-      final geo = Uri.parse('geo:$lat,$lng');
-      if (await canLaunchUrl(geo)) {
-        await launchUrl(geo);
-      } else {
-        if (mounted) {
-          final isArabic =
-          Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                isArabic
-                    ? 'لا يمكن فتح تطبيق الخرائط على هذا الجهاز.'
-                    : 'Could not open maps on this device.',
-              ),
-            ),
-          );
-        }
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isArabic =
-    Localizations.localeOf(context).languageCode.toLowerCase().startsWith('ar');
-
-    final titleText = isArabic ? "مواقع الأطباء" : "Doctors Locations";
-    final loadingText = isArabic ? "جاري تحميل المواقع..." : "Loading locations...";
-    final errorText = isArabic ? "حدث خطأ أثناء تحميل المواقع" : "Error loading locations";
+    final purple = Colors.purple;
 
     return Scaffold(
+      backgroundColor: Colors.purple.shade50,
       appBar: AppBar(
-        title: Text(titleText, style: const TextStyle(color: Colors.white)),
-        backgroundColor: Colors.purple,
+        title: Text(
+          currentLanguage == "ar" ? 'روابط التواصل' : 'Social Media',
+          style: const TextStyle(color: Colors.white),
+        ),
+        backgroundColor: purple,
         centerTitle: true,
       ),
-      body: _isLoading
-          ? Center(child: Column(
-        mainAxisSize: MainAxisSize.min,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 12),
-          Text(loadingText),
+          const SizedBox(height: 16),
+
+          // Instagram
+          _buildContactCard(
+            context: context,
+            purple: purple,
+            icon: Icons.camera_alt,
+            platform: currentLanguage == "ar" ? 'إنستغرام' : 'Instagram',
+            handle: '@omanimoh',
+            description: currentLanguage == "ar"
+                ? 'نصائح صحية، أسئلة وأجوبة مع الأطباء، وآخر تحديثات التطبيق.'
+                : 'Health tips, doctor Q&As, patient stories, and app highlights.',
+            onOpen: () => _openExternal(context, _instagramUri),
+            buttonText: currentLanguage == "ar" ? 'فتح' : 'Open',
+          ),
+          const SizedBox(height: 16),
+
+          // LinkedIn
+          _buildContactCard(
+            context: context,
+            purple: purple,
+            icon: Icons.business,
+            platform: 'LinkedIn',
+            handle: 'Reem Alrawahi',
+            description: currentLanguage == "ar"
+                ? 'أبحاث طبية، تعاونات مع مختصين، وتحديثات حول تطوير التطبيق.'
+                : 'Medical research updates, collaborations, and app innovations.',
+            onOpen: () => _openExternal(context, _linkedInUri),
+            buttonText: currentLanguage == "ar" ? 'فتح' : 'Open',
+          ),
         ],
-      ))
-          : (_markers.isEmpty
-          ? Center(child: Text(isArabic ? 'لا توجد مواقع متاحة' : 'No locations available'))
-          : GoogleMap(
-        initialCameraPosition: CameraPosition(
-          target: _initialPosition,
-          zoom: 10,
-        ),
-        markers: _markers,
-        onMapCreated: (controller) => _mapController = controller,
-        zoomControlsEnabled: true,
-        mapType: MapType.normal,
-      )),
+      ),
     );
   }
 
-  @override
-  void dispose() {
-    _mapController?.dispose();
-    super.dispose();
+  Widget _buildContactCard({
+    required BuildContext context,
+    required Color purple,
+    required IconData icon,
+    required String platform,
+    required String handle,
+    required String description,
+    required VoidCallback onOpen,
+    required String buttonText,
+  }) {
+    return InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: purple.withOpacity(0.12),
+                    child: Icon(icon, color: purple),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      platform,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purple.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                handle,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.black87,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                description,
+                style: const TextStyle(
+                    fontSize: 14, color: Colors.black54, height: 1.35),
+              ),
+
+              const SizedBox(height: 12),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: onOpen,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: purple,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    icon: const Icon(Icons.open_in_new,
+                        size: 18, color: Colors.white),
+                    label: Text(buttonText),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
