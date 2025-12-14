@@ -18,6 +18,11 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
+  bool get isArabic =>
+      Localizations.localeOf(context).languageCode.startsWith('ar');
+
+  String t(String en, String ar) => isArabic ? ar : en;
+
   @override
   void dispose() {
     emailController.dispose();
@@ -27,207 +32,269 @@ class _DoctorLoginPageState extends State<DoctorLoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.purple,
-        title: const Text("Doctor Login", style: TextStyle(color: Colors.white)),
-        centerTitle: true,
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(vertical: 24),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            margin: const EdgeInsets.symmetric(horizontal: 24),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Image(
-                    image: AssetImage('images/logo.png'),
-                    height: 120,
-                    width: 120,
+    return Directionality(
+      textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Colors.purple,
+          title: Text(
+            t("Doctor Login", "تسجيل دخول الطبيب"),
+            style: const TextStyle(color: Colors.white),
+          ),
+          centerTitle: true,
+        ),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    "Doctor Login",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.purple,
+                ],
+              ),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Image(
+                      image: AssetImage('images/logo.png'),
+                      height: 120,
+                      width: 120,
                     ),
-                  ),
-                  const SizedBox(height: 24),
+                    const SizedBox(height: 24),
 
-                  // Email Field
-                  TextFormField(
-                    controller: emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.email),
-                      border: OutlineInputBorder(),
-                      labelText: 'Email',
+                    Text(
+                      t("Doctor Login", "تسجيل دخول الطبيب"),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.purple,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your email';
-                      } else if (!value.contains('@') || !value.contains('.')) {
-                        return 'Please enter a valid email';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
 
-                  // Password Field
-                  TextFormField(
-                    controller: passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.lock),
-                      border: OutlineInputBorder(),
-                      labelText: 'Password',
+                    const SizedBox(height: 24),
+
+                    
+                    TextFormField(
+                      controller: emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.email),
+                        border: const OutlineInputBorder(),
+                        labelText: t("Email", "البريد الإلكتروني"),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return t(
+                            "Please enter your email",
+                            "الرجاء إدخال البريد الإلكتروني",
+                          );
+                        } else if (!value.contains('@') ||
+                            !value.contains('.')) {
+                          return t(
+                            "Please enter a valid email",
+                            "الرجاء إدخال بريد إلكتروني صحيح",
+                          );
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your password';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 8),
+                    const SizedBox(height: 16),
 
-                  // Forgot Password Button
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
+                    
+                    TextFormField(
+                      controller: passwordController,
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.lock),
+                        border: const OutlineInputBorder(),
+                        labelText: t("Password", "كلمة المرور"),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return t(
+                            "Please enter your password",
+                            "الرجاء إدخال كلمة المرور",
+                          );
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+
+                    
+                    Align(
+                      alignment:
+                      isArabic ? Alignment.centerLeft : Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                              const DoctorForgotPasswordPage(),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          t("Forgot Password?", "نسيت كلمة المرور؟"),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: Text(
+                          t("Login", "تسجيل الدخول"),
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 16),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    
+                    TextButton(
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const DoctorForgotPasswordPage()),
+                          MaterialPageRoute(
+                            builder: (_) => const AddOrUpdateDoctorPage(),
+                          ),
                         );
                       },
-                      child: const Text("Forgot Password?"),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Login Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                      child: Text(
+                        t(
+                          "Register as New Doctor",
+                          "تسجيل طبيب جديد",
                         ),
                       ),
-                      child: const Text(
-                        'Login',
-                        style: TextStyle(color: Colors.white, fontSize: 16),
-                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const AddOrUpdateDoctorPage()),
-                      );
-                    },
-                    child: const Text("Register as New Doctor"),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => HealSystem(
-                title: 'Heal System',
-                onThemeChanged: (val) {},
-                onLanguageChanged: (val) {},
-                currentLanguage: 'English',
-                isDarkMode: false,
+
+        
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: Colors.purple,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => HealSystem(
+                  title: 'Heal System',
+                  onThemeChanged: (_) {},
+                  onLanguageChanged: (_) {},
+                  currentLanguage: isArabic ? 'Arabic' : 'English',
+                  isDarkMode: false,
+                ),
               ),
-            ),
-          );
-        },
-        backgroundColor: Colors.purple,
-        child: const Icon(Icons.arrow_back, color: Colors.white),
+            );
+          },
+          child: const Icon(Icons.arrow_back, color: Colors.white),
+        ),
       ),
     );
   }
 
-  // ✅ Updated login method with 'enabled' check
+ 
   void _login() async {
-    if (_formKey.currentState!.validate()) {
-      String email = emailController.text.trim();
-      String password = passwordController.text.trim();
+    if (!_formKey.currentState!.validate()) return;
 
-      try {
-        UserCredential userCredential = await FirebaseAuth.instance
-            .signInWithEmailAndPassword(email: email, password: password);
+    String email = emailController.text.trim();
+    String password = passwordController.text.trim();
 
-        User? user = userCredential.user;
+    try {
+      UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
 
-        if (user != null) {
-          final DatabaseReference dbRef = FirebaseDatabase.instance.ref();
-          final DataSnapshot snapshot =
-          await dbRef.child("doctors").child(user.uid).get();
+      User? user = userCredential.user;
 
-          if (snapshot.exists) {
-            final data = snapshot.value as Map<dynamic, dynamic>;
-            bool enabled = data['enabled'] == true;
+      if (user != null) {
+        final ref =
+        FirebaseDatabase.instance.ref("doctors").child(user.uid);
+        final snapshot = await ref.get();
 
-            if (!enabled) {
-              await FirebaseAuth.instance.signOut();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Sorry, your account is disabled.")),
-              );
-              return;
-            }
+        if (snapshot.exists) {
+          final data = snapshot.value as Map<dynamic, dynamic>;
+          bool enabled = data['enabled'] == true;
 
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Login successful!")),
-            );
-
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const DoctorDashboardPage()),
-            );
-          } else {
+          if (!enabled) {
             await FirebaseAuth.instance.signOut();
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Access denied. Not a doctor.")),
+              SnackBar(
+                content: Text(
+                  t(
+                    "Sorry, your account is disabled.",
+                    "عذرًا، تم تعطيل حسابك.",
+                  ),
+                ),
+              ),
             );
+            return;
           }
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                t("Login successful!", "تم تسجيل الدخول بنجاح"),
+              ),
+            ),
+          );
+
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const DoctorDashboardPage(),
+            ),
+          );
+        } else {
+          await FirebaseAuth.instance.signOut();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                t(
+                  "Access denied. Not a doctor.",
+                  "غير مصرح لك بالدخول كطبيب.",
+                ),
+              ),
+            ),
+          );
         }
-      } on FirebaseAuthException catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? "Login failed")),
-        );
       }
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.message ??
+                t("Login failed", "فشل تسجيل الدخول"),
+          ),
+        ),
+      );
     }
   }
 }
