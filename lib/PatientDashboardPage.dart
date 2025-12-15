@@ -42,13 +42,6 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   String _safeEmail(String email) =>
       email.trim().toLowerCase().replaceAll('.', '_');
 
-  String? _extractAppointmentId(String roomId) {
-    if (roomId.startsWith("appointment_")) {
-      return roomId.substring("appointment_".length);
-    }
-    return null;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -64,27 +57,45 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     _incomingCallRef = FirebaseDatabase.instance.ref("incomingCalls/$safe");
 
     _callSubscription = _incomingCallRef!.onValue.listen((event) async {
-      if (!mounted || event.snapshot.value == null) return;
+      if (!mounted) return;
+
+      if (event.snapshot.value == null) {
+        _callDialogShown = false;
+        return;
+      }
 
       final data = Map<String, dynamic>.from(event.snapshot.value as Map);
 
-      final active = data["active"] == true;
-      final roomId = (data["roomId"] ?? "").toString();
-      final doctorName = (data["doctorName"] ?? "Doctor").toString();
+      final bool active = data["active"] == true;
+      final String roomId = (data["roomId"] ?? "").toString();
+      final String doctorName = (data["doctorName"] ?? "Doctor").toString();
+      final String appointmentId = (data["appointmentId"] ?? "").toString();
 
-      if (!active || roomId.isEmpty) return;
+      if (!active) {
+        _callDialogShown = false;
+        return;
+      }
+
+      if (roomId.isEmpty) return;
+
+      // ✅ Do not show popup if already shown
       if (_callDialogShown) return;
 
-      final apptId = _extractAppointmentId(roomId);
-      if (apptId == null || apptId.isEmpty) return;
+      if (appointmentId.isNotEmpty) {
+        final apptSnap =
+        await FirebaseDatabase.instance.ref("appointments/$appointmentId").get();
 
-      final startSnap = await FirebaseDatabase.instance
-          .ref("appointments/$apptId/startMeeting")
-          .get();
+        if (!apptSnap.exists || apptSnap.value == null) {
+          return; 
+        }
 
-      final startMeeting = startSnap.exists && startSnap.value == true;
+        final appt = Map<dynamic, dynamic>.from(apptSnap.value as Map);
+        final bool startMeeting = appt["startMeeting"] == true;
 
-      if (!startMeeting) return;
+        if (!startMeeting) return; 
+      } else {
+        return;
+      }
 
       _callDialogShown = true;
       _showIncomingCallDialog(roomId, doctorName);
@@ -92,15 +103,21 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   }
 
   void _showIncomingCallDialog(String roomId, String doctorName) {
+    final bool isArabic = Localizations.localeOf(context).languageCode == 'ar';
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Text("Incoming Call"),
-        content: Text("Dr. $doctorName started a meeting.\nJoin now?"),
+        title: Text(isArabic ? "مكالمة واردة" : "Incoming Call"),
+        content: Text(
+          isArabic
+              ? "الطبيب $doctorName يدعوك للانضمام إلى الموعد"
+              : "Dr. $doctorName is inviting you to join the meeting",
+        ),
         actions: [
           TextButton(
-            child: const Text("Reject"),
+            child: Text(isArabic ? "رفض" : "Reject"),
             onPressed: () async {
               await _incomingCallRef?.remove();
               _callDialogShown = false;
@@ -108,34 +125,20 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
             },
           ),
           ElevatedButton(
-            child: const Text("Join"),
+            child: Text(isArabic ? "انضمام" : "Join"),
             onPressed: () async {
               await _incomingCallRef?.remove();
               _callDialogShown = false;
               if (mounted) Navigator.pop(context);
 
-              final apptId = _extractAppointmentId(roomId);
-
               final jitsiMeet = JitsiMeet();
 
               final listener = JitsiMeetEventListener(
-                conferenceTerminated: (url, error) async {
-                  if (apptId != null) {
-                    try {
-                      await FirebaseDatabase.instance
-                          .ref("appointments/$apptId")
-                          .update({"startMeeting": false});
-                    } catch (_) {}
-                  }
+                conferenceTerminated: (url, error) {
+                  debugPrint("Patient terminated: $url error=$error");
                 },
-                readyToClose: () async {
-                  if (apptId != null) {
-                    try {
-                      await FirebaseDatabase.instance
-                          .ref("appointments/$apptId")
-                          .update({"startMeeting": false});
-                    } catch (_) {}
-                  }
+                readyToClose: () {
+                  debugPrint("Patient readyToClose");
                 },
               );
 
@@ -145,16 +148,16 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                   configOverrides: {
                     "startWithAudioMuted": false,
                     "startWithVideoMuted": false,
+                    "startWithLobbyEnabled": false,
                     "enableWelcomePage": false,
                   },
                   featureFlags: {
-                    "prejoinpage.enabled": false,
                     "lobby-mode.enabled": false,
+                    "prejoinpage.enabled": false,
                   },
                   userInfo: JitsiMeetUserInfo(
                     displayName:
-                    FirebaseAuth.instance.currentUser?.displayName ??
-                        "Patient",
+                    FirebaseAuth.instance.currentUser?.displayName ?? "Patient",
                     email: FirebaseAuth.instance.currentUser?.email,
                   ),
                 ),
@@ -261,7 +264,6 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
         ],
       ),
 
-      // ✅ Drawer موجود
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -283,19 +285,25 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                 ],
               ),
             ),
-            _drawerItem(Icons.school, isArabic ? "عرض الشرح التعليمي" : "View Tutorial",
+            _drawerItem(Icons.school,
+                isArabic ? "عرض الشرح التعليمي" : "View Tutorial",
                     () => _go(const PatientTutorialPage())),
-            _drawerItem(Icons.person, isArabic ? "الملف الشخصي" : "Personal Profile",
+            _drawerItem(Icons.person,
+                isArabic ? "الملف الشخصي" : "Personal Profile",
                     () => _go(const PatientProfilePage())),
             _drawerItem(Icons.smart_toy, isArabic ? "المساعد الذكي" : "AI Chatbot",
                     () => _go(const AIChatbotPage())),
-            _drawerItem(Icons.medical_services, isArabic ? "الأدوية" : "Medication Info",
+            _drawerItem(Icons.medical_services,
+                isArabic ? "الأدوية" : "Medication Info",
                     () => _go(const MedicationInfoPage())),
-            _drawerItem(Icons.feedback, isArabic ? "إرسال ملاحظة" : "Send Feedback",
+            _drawerItem(Icons.feedback,
+                isArabic ? "إرسال ملاحظة" : "Send Feedback",
                     () => _go(const SendFeedbackPage())),
-            _drawerItem(Icons.warning_amber, isArabic ? "إرسال مشكلة" : "Send Problem",
+            _drawerItem(Icons.warning_amber,
+                isArabic ? "إرسال مشكلة" : "Send Problem",
                     () => _go(const SendProblemPage())),
-            _drawerItem(Icons.calendar_month, isArabic ? "المواعيد" : "Booked Appointments",
+            _drawerItem(Icons.calendar_month,
+                isArabic ? "المواعيد" : "Booked Appointments",
                     () => _go(const BookedAppointmentsPage())),
             _drawerItem(Icons.location_city, isArabic ? "الموقع" : "Location",
                     () => _go(const ClinicHospitalPage())),
@@ -334,24 +342,23 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
               ],
             ),
             const SizedBox(height: 16),
-
             Expanded(
               child: StreamBuilder(
                 stream: doctorsRef.onValue,
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData ||
-                      snapshot.data!.snapshot.value == null) {
+                  if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
                     return Center(
                       child: Text(isArabic ? "لا يوجد أطباء" : "No doctors"),
                     );
                   }
 
                   final data = Map<String, dynamic>.from(
-                      snapshot.data!.snapshot.value as Map);
+                    snapshot.data!.snapshot.value as Map,
+                  );
 
                   final doctors = data.entries
-                      .map((e) =>
-                      MapEntry(e.key, Map<String, dynamic>.from(e.value)))
+                      .map((e) => MapEntry(
+                      e.key, Map<String, dynamic>.from(e.value)))
                       .where((e) => _matchesSearch(e.value))
                       .toList();
 
@@ -384,9 +391,8 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                               leading: CircleAvatar(
                                 radius: 24,
                                 backgroundColor: Colors.purple.shade100,
-                                backgroundImage: snap.data != null
-                                    ? NetworkImage(snap.data!)
-                                    : null,
+                                backgroundImage:
+                                snap.data != null ? NetworkImage(snap.data!) : null,
                                 child: snap.data == null
                                     ? const Icon(Icons.person,
                                     color: Colors.purple, size: 28)
@@ -394,8 +400,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                               ),
                               title: Text(doctor["fullName"] ?? ""),
                               subtitle: Text(doctor["address"] ?? ""),
-                              trailing: const Icon(Icons.arrow_forward_ios,
-                                  size: 16),
+                              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                               onTap: () {
                                 final location = doctor["location"];
                                 Navigator.push(
@@ -406,17 +411,12 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                                       description: doctor["description"] ?? "",
                                       staffId: doctor["staffId"] ?? "",
                                       address: doctor["address"] ?? "",
-                                      specialization:
-                                      doctor["specialization"] ?? "",
-                                      lat: location != null &&
-                                          location["lat"] != null
-                                          ? double.tryParse(
-                                          location["lat"].toString())
+                                      specialization: doctor["specialization"] ?? "",
+                                      lat: location != null && location["lat"] != null
+                                          ? double.tryParse(location["lat"].toString())
                                           : null,
-                                      lng: location != null &&
-                                          location["lng"] != null
-                                          ? double.tryParse(
-                                          location["lng"].toString())
+                                      lng: location != null && location["lng"] != null
+                                          ? double.tryParse(location["lng"].toString())
                                           : null,
                                     ),
                                   ),
