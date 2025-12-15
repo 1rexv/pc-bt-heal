@@ -47,7 +47,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.light;
-  String _language = 'English'; 
+  String _language = 'English';
 
   static final GlobalKey<NavigatorState> navigatorKey =
   GlobalKey<NavigatorState>();
@@ -90,7 +90,7 @@ class _MyAppState extends State<MyApp> {
   void _changeLanguage(String? selectedLang) {
     if (selectedLang != null) {
       setState(() {
-        _language = selectedLang; 
+        _language = selectedLang;
       });
     }
   }
@@ -174,7 +174,7 @@ class HealSystem extends StatefulWidget {
   final String title;
   final void Function(bool) onThemeChanged;
   final void Function(String?) onLanguageChanged;
-  final String currentLanguage; 
+  final String currentLanguage;
   final bool isDarkMode;
 
   const HealSystem({
@@ -195,7 +195,6 @@ class _HealSystemState extends State<HealSystem> {
   Widget build(BuildContext context) {
     final bool isArabic = widget.currentLanguage == 'Arabic';
 
-    // 🔹 نصوص حسب اللغة
     final welcomeText       = isArabic ? 'أهلاً بك!' : 'Welcome!';
     final chooseLoginText   = isArabic ? 'اختر نوع تسجيل الدخول:' : 'Choose login type:';
     final doctorLoginText   = isArabic ? 'تسجيل دخول دكتور' : 'Doctor Login';
@@ -280,7 +279,9 @@ class _HealSystemState extends State<HealSystem> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const ContactUsPage(),
+                    builder: (_) => ContactUsPage(
+                      currentLanguage: widget.currentLanguage,
+                    ),
                   ),
                 );
               },
