@@ -3,6 +3,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'dart:async';
+import 'package:jitsi_meet_flutter_sdk/jitsi_meet_flutter_sdk.dart';
+
 import 'PatientLoginPage.dart';
 import 'DoctorDetailsPage.dart';
 import 'PatientProfilePage.dart';
@@ -25,18 +28,85 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
   final DatabaseReference doctorsRef =
   FirebaseDatabase.instance.ref().child("doctors");
 
+  DatabaseReference? _incomingCallRef;
+  StreamSubscription<DatabaseEvent>? _callSubscription;
+  bool _callDialogShown = false;
+
   final Map<String, String?> _imageCache = {};
   final TextEditingController _searchController = TextEditingController();
-
   String _searchQuery = "";
 
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _isListening = false;
 
   @override
+  void initState() {
+    super.initState();
+    _listenForIncomingCall();
+  }
+
+  void _listenForIncomingCall() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    _incomingCallRef =
+        FirebaseDatabase.instance.ref("incomingCalls/$uid");
+
+    _callSubscription = _incomingCallRef!.onValue.listen((event) {
+      if (!mounted || event.snapshot.value == null) return;
+
+      final data =
+      Map<String, dynamic>.from(event.snapshot.value as Map);
+
+      if (data["active"] == true && !_callDialogShown) {
+        _callDialogShown = true;
+        _showIncomingCallDialog(
+          data["roomId"],
+          data["doctorName"],
+        );
+      }
+    });
+  }
+
+  void _showIncomingCallDialog(String roomId, String doctorName) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        title: const Text("Incoming Call"),
+        content: Text("Dr. $doctorName is calling you"),
+        actions: [
+          TextButton(
+            child: const Text("Reject"),
+            onPressed: () async {
+              await _incomingCallRef?.remove();
+              _callDialogShown = false;
+              if (mounted) Navigator.pop(context);
+            },
+          ),
+          ElevatedButton(
+            child: const Text("Accept"),
+            onPressed: () async {
+              await _incomingCallRef?.remove();
+              _callDialogShown = false;
+              if (mounted) Navigator.pop(context);
+
+              final jitsiMeet = JitsiMeet();
+              jitsiMeet.join(
+                JitsiMeetConferenceOptions(room: roomId),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   void dispose() {
     _speech.stop();
     _searchController.dispose();
+    _callSubscription?.cancel();
     super.dispose();
   }
 
@@ -49,7 +119,8 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
     );
   }
 
-  Future<String?> _getDoctorImage(String uid, Map<String, dynamic> doctor) async {
+  Future<String?> _getDoctorImage(
+      String uid, Map<String, dynamic> doctor) async {
     if (_imageCache.containsKey(uid)) return _imageCache[uid];
 
     try {
@@ -59,12 +130,12 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
         return doctor["profileImage"];
       }
 
-      final ref = FirebaseStorage.instance.ref("doctors/$uid/profile.jpg");
+      final ref =
+      FirebaseStorage.instance.ref("doctors/$uid/profile.jpg");
       final url = await ref.getDownloadURL();
       _imageCache[uid] = url;
       return url;
-    } catch (e) {
-      debugPrint("Could not load image for $uid: $e");
+    } catch (_) {
       _imageCache[uid] = null;
       return null;
     }
@@ -77,45 +148,21 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
       return;
     }
 
-    bool available = await _speech.initialize(
-      onStatus: (status) => debugPrint("Status: $status"),
-      onError: (error) => debugPrint("Speech error: ${error.errorMsg}"),
-    );
-
-    if (!available) {
-      if (mounted) {
-        final isArabic =
-            Localizations.localeOf(context).languageCode == 'ar';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isArabic
-                  ? "البحث الصوتي غير متوفر، يرجى التحقق من صلاحيات الميكروفون."
-                  : "Voice search not available. Check mic permissions.",
-            ),
-          ),
-        );
-      }
-      return;
-    }
+    bool available = await _speech.initialize();
+    if (!available) return;
 
     setState(() => _isListening = true);
 
     await _speech.listen(
       listenFor: const Duration(seconds: 8),
-      pauseFor: const Duration(seconds: 3),
-      partialResults: true,
-      cancelOnError: true,
       onResult: (result) {
-        final recognized = result.recognizedWords;
-
-        if (recognized.isNotEmpty) {
+        final words = result.recognizedWords;
+        if (words.isNotEmpty) {
           setState(() {
-            _searchController.text = recognized;
-            _searchQuery = recognized.toLowerCase();
+            _searchController.text = words;
+            _searchQuery = words.toLowerCase();
           });
         }
-
         if (result.finalResult) {
           _speech.stop();
           setState(() => _isListening = false);
@@ -126,58 +173,22 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
 
   bool _matchesSearch(Map<String, dynamic> doctor) {
     if (_searchQuery.isEmpty) return true;
-
-    final name = (doctor["fullName"] ?? "").toString().toLowerCase();
-    final address = (doctor["address"] ?? "").toString().toLowerCase();
-
-    return name.contains(_searchQuery) || address.contains(_searchQuery);
+    final name = (doctor["fullName"] ?? "").toLowerCase();
+    final address = (doctor["address"] ?? "").toLowerCase();
+    return name.contains(_searchQuery) ||
+        address.contains(_searchQuery);
   }
+
 
   @override
   Widget build(BuildContext context) {
     final bool isArabic =
         Localizations.localeOf(context).languageCode == 'ar';
 
-    final appBarTitle =
-    isArabic ? "لوحة تحكم المريض" : "Patient Dashboard";
-    final drawerHeaderTitle =
-    isArabic ? "مرحباً بالمريض" : "Welcome Patient";
-    final drawerHeaderSubtitle =
-    isArabic ? "خيارات القائمة" : "Menu Options";
-
-    final viewTutorialText =
-    isArabic ? "عرض الشرح التعليمي" : "View Tutorial";
-    final personalProfileText =
-    isArabic ? "الملف الشخصي" : "Personal Profile";
-    final aiChatbotText = isArabic ? "المساعد الذكي" : "AI Chatbot";
-    final medicationInfoText =
-    isArabic ? "الأدوية الموصوفة" : "Medication Info";
-    final sendFeedbackText =
-    isArabic ? "إرسال ملاحظة" : "Send Feedback";
-    final sendProblemText =
-    isArabic ? "إرسال مشكلة" : "Send Problem";
-    final bookedAppointmentsText =
-    isArabic ? "المواعيد المحجوزة" : "Booked Appointments";
-    final locationText = isArabic ? "الموقع" : "Location";
-
-    final searchHint = isArabic
-        ? "ابحث عن طبيب بالاسم أو العنوان"
-        : "Search doctor by name or address";
-
-    final loadingDoctorsText =
-    isArabic ? "جاري تحميل الأطباء..." : "Loading doctors...";
-    final errorDoctorsText =
-    isArabic ? "حدث خطأ أثناء تحميل الأطباء" : "Error loading doctors";
-    final noDoctorsText =
-    isArabic ? "لا يوجد أطباء متاحون" : "No doctors found";
-    final noMatchDoctorsText = isArabic
-        ? "لا يوجد أطباء يطابقون بحثك."
-        : "No doctors match your search.";
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          appBarTitle,
+          isArabic ? "لوحة تحكم المريض" : "Patient Dashboard",
           style: const TextStyle(color: Colors.white),
         ),
         backgroundColor: Colors.purple,
@@ -185,7 +196,6 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
-            tooltip: isArabic ? "تسجيل الخروج" : "Sign Out",
             onPressed: () => _signOut(context),
           ),
         ],
@@ -201,7 +211,7 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    drawerHeaderTitle,
+                    isArabic ? "مرحباً بالمريض" : "Welcome Patient",
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -209,106 +219,40 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    drawerHeaderSubtitle,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                    ),
+                    isArabic ? "خيارات القائمة" : "Menu Options",
+                    style: const TextStyle(color: Colors.white70),
                   ),
                 ],
               ),
             ),
-            
-            ListTile(
-              leading: const Icon(Icons.school),
-              title: Text(viewTutorialText),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const PatientTutorialPage(),
-                ),
-              ),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.person),
-              title: Text(personalProfileText),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const PatientProfilePage(),
-                ),
-              ),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.smart_toy),
-              title: Text(aiChatbotText),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const AIChatbotPage(),
-                ),
-              ),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.medical_services),
-              title: Text(medicationInfoText),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const MedicationInfoPage(),
-                ),
-              ),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.feedback),
-              title: Text(sendFeedbackText),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const SendFeedbackPage(),
-                ),
-              ),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.warning_amber),
-              title: Text(sendProblemText),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const SendProblemPage(),
-                ),
-              ),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.calendar_month),
-              title: Text(bookedAppointmentsText),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const BookedAppointmentsPage(),
-                ),
-              ),
-            ),
-
-            ListTile(
-              leading: const Icon(Icons.location_city),
-              title: Text(locationText),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ClinicHospitalPage(),
-                ),
-              ),
-            ),
+            _drawerItem(Icons.school,
+                isArabic ? "عرض الشرح التعليمي" : "View Tutorial",
+                    () => _go(const PatientTutorialPage())),
+            _drawerItem(Icons.person,
+                isArabic ? "الملف الشخصي" : "Personal Profile",
+                    () => _go(const PatientProfilePage())),
+            _drawerItem(Icons.smart_toy,
+                isArabic ? "المساعد الذكي" : "AI Chatbot",
+                    () => _go(const AIChatbotPage())),
+            _drawerItem(Icons.medical_services,
+                isArabic ? "الأدوية" : "Medication Info",
+                    () => _go(const MedicationInfoPage())),
+            _drawerItem(Icons.feedback,
+                isArabic ? "إرسال ملاحظة" : "Send Feedback",
+                    () => _go(const SendFeedbackPage())),
+            _drawerItem(Icons.warning_amber,
+                isArabic ? "إرسال مشكلة" : "Send Problem",
+                    () => _go(const SendProblemPage())),
+            _drawerItem(Icons.calendar_month,
+                isArabic ? "المواعيد" : "Booked Appointments",
+                    () => _go(const BookedAppointmentsPage())),
+            _drawerItem(Icons.location_city,
+                isArabic ? "الموقع" : "Location",
+                    () => _go(const ClinicHospitalPage())),
           ],
         ),
       ),
-      
+
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -319,64 +263,57 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                   child: TextField(
                     controller: _searchController,
                     decoration: InputDecoration(
-                      hintText: searchHint,
+                      hintText: isArabic
+                          ? "ابحث عن طبيب بالاسم أو العنوان"
+                          : "Search doctor by name or address",
                       prefixIcon: const Icon(Icons.search),
                       border: const OutlineInputBorder(),
                     ),
-                    onChanged: (value) =>
-                        setState(() => _searchQuery = value.toLowerCase()),
+                    onChanged: (v) =>
+                        setState(() => _searchQuery = v.toLowerCase()),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
                   icon: Icon(
                     _isListening ? Icons.mic : Icons.mic_none,
-                    color: _isListening ? Colors.red : Colors.purple,
+                    color:
+                    _isListening ? Colors.red : Colors.purple,
                   ),
                   onPressed: _toggleVoiceSearch,
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-            
+
             Expanded(
               child: StreamBuilder(
                 stream: doctorsRef.onValue,
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return Center(child: Text(loadingDoctorsText));
-                  }
-
-                  if (snapshot.hasError) {
-                    return Center(child: Text(errorDoctorsText));
-                  }
-
                   if (!snapshot.hasData ||
                       snapshot.data!.snapshot.value == null) {
-                    return Center(child: Text(noDoctorsText));
+                    return Center(
+                        child: Text(
+                            isArabic ? "لا يوجد أطباء" : "No doctors"));
                   }
 
                   final data = Map<String, dynamic>.from(
-                    (snapshot.data! as DatabaseEvent).snapshot.value as Map,
-                  );
+                      snapshot.data!.snapshot.value as Map);
 
                   final doctors = data.entries
-                      .map(
-                        (e) => MapEntry(
-                      e.key,
-                      Map<String, dynamic>.from(e.value),
-                    ),
-                  )
-                      .where((entry) {
-                    final doctor = entry.value;
-                    final isDisabled = doctor["enabled"] != null &&
-                        doctor["enabled"] == false;
-                    return !isDisabled && _matchesSearch(doctor);
-                  }).toList();
+                      .map((e) =>
+                      MapEntry(e.key, Map<String, dynamic>.from(e.value)))
+                      .where((e) => _matchesSearch(e.value))
+                      .toList();
 
                   if (doctors.isEmpty) {
-                    return Center(child: Text(noMatchDoctorsText));
+                    return Center(
+                      child: Text(
+                        isArabic
+                            ? "لا يوجد أطباء يطابقون بحثك"
+                            : "No doctors match your search",
+                      ),
+                    );
                   }
 
                   return ListView.builder(
@@ -387,11 +324,10 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
 
                       return FutureBuilder<String?>(
                         future: _getDoctorImage(uid, doctor),
-                        builder: (context, snapshot) {
-                          final imageUrl = snapshot.data;
-
+                        builder: (context, snap) {
                           return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            margin:
+                            const EdgeInsets.symmetric(vertical: 8),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
@@ -400,52 +336,41 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
                               leading: CircleAvatar(
                                 radius: 24,
                                 backgroundColor: Colors.purple.shade100,
-                                backgroundImage: imageUrl != null
-                                    ? NetworkImage(imageUrl)
-                                    : const AssetImage(
-                                    "images/doctor_placeholder.png")
-                                as ImageProvider,
+                                backgroundImage: snap.data != null ? NetworkImage(snap.data!) : null,
+                                child: snap.data == null
+                                    ? const Icon(
+                                  Icons.person,
+                                  color: Colors.purple,
+                                  size: 28,
+                                )
+                                    : null,
                               ),
-                              title: Text(
-                                doctor["fullName"] ??
-                                    (isArabic
-                                        ? "طبيب غير معروف"
-                                        : "Unknown Doctor"),
-                              ),
-                              subtitle: Text(
-                                doctor["address"] ??
-                                    (isArabic
-                                        ? "العنوان غير متوفر"
-                                        : "Address not available"),
-                              ),
+
+                              title: Text(doctor["fullName"] ?? ""),
+                              subtitle:
+                              Text(doctor["address"] ?? ""),
                               trailing: const Icon(
                                 Icons.arrow_forward_ios,
                                 size: 16,
                               ),
                               onTap: () {
+                                final location = doctor["location"];
+
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => DoctorDetailsPage(
                                       doctorName: doctor["fullName"] ?? "",
-                                      description:
-                                      doctor["description"] ?? "",
+                                      description: doctor["description"] ?? "",
                                       staffId: doctor["staffId"] ?? "",
                                       address: doctor["address"] ?? "",
-                                      lat: doctor["location"]?["lat"] != null
-                                          ? double.tryParse(
-                                        doctor["location"]["lat"]
-                                            .toString(),
-                                      )
+                                      specialization: doctor["specialization"] ?? "",
+                                      lat: location != null && location["lat"] != null
+                                          ? double.tryParse(location["lat"].toString())
                                           : null,
-                                      lng: doctor["location"]?["lng"] != null
-                                          ? double.tryParse(
-                                        doctor["location"]["lng"]
-                                            .toString(),
-                                      )
+                                      lng: location != null && location["lng"] != null
+                                          ? double.tryParse(location["lng"].toString())
                                           : null,
-                                      specialization:
-                                      doctor["specialization"] ?? "",
                                     ),
                                   ),
                                 );
@@ -462,6 +387,22 @@ class _PatientDashboardPageState extends State<PatientDashboardPage> {
           ],
         ),
       ),
+    );
+  }
+
+  ListTile _drawerItem(
+      IconData icon, String text, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(text),
+      onTap: onTap,
+    );
+  }
+
+  void _go(Widget page) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => page),
     );
   }
 }
