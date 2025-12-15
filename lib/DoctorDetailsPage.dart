@@ -34,11 +34,6 @@ class DoctorDetailsPage extends StatefulWidget {
 class _DoctorDetailsPageState extends State<DoctorDetailsPage> {
   String? _doctorImageUrl;
 
-  bool get isArabic =>
-      Directionality.of(context) == TextDirection.rtl;
-
-  String _t(String ar, String en) => isArabic ? ar : en;
-
   @override
   void initState() {
     super.initState();
@@ -53,50 +48,57 @@ class _DoctorDetailsPageState extends State<DoctorDetailsPage> {
           .equalTo(widget.staffId)
           .get();
 
-      if (snapshot.exists && snapshot.value is Map) {
-        final data = Map<String, dynamic>.from(snapshot.value as Map);
-        final first = Map<String, dynamic>.from(data.values.first);
+      if (!snapshot.exists) return;
 
-        if (first['profileImage'] != null &&
-            first['profileImage'].toString().isNotEmpty) {
-          setState(() => _doctorImageUrl = first['profileImage']);
-          return;
-        }
+      final data = Map<String, dynamic>.from(snapshot.value as Map);
+      final doctor = data.values.first as Map;
 
-        final uid = data.keys.first.toString();
-        final ref =
-        FirebaseStorage.instance.ref("doctors/$uid/profile.jpg");
-        final url = await ref.getDownloadURL();
-        setState(() => _doctorImageUrl = url);
+      if (doctor['profileImage'] != null &&
+          doctor['profileImage'].toString().isNotEmpty) {
+        setState(() => _doctorImageUrl = doctor['profileImage']);
+        return;
       }
+
+      final uid = data.keys.first.toString();
+      final ref =
+      FirebaseStorage.instance.ref("doctors/$uid/profile.jpg");
+      final url = await ref.getDownloadURL();
+      setState(() => _doctorImageUrl = url);
     } catch (e) {
-      debugPrint("Image load error: $e");
+      debugPrint("Image load failed: $e");
     }
   }
 
-  Future<void> _saveAppointment(BuildContext context) async {
-    final user = FirebaseAuth.instance.currentUser;
+  Future<void> _saveAppointmentToDatabase(BuildContext context) async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final bool isArabic =
+        Localizations.localeOf(context).languageCode == 'ar';
 
-    if (user == null) {
+    if (currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_t("يجب تسجيل الدخول", "You must login"))),
+        SnackBar(
+          content: Text(
+            isArabic
+                ? "يجب تسجيل الدخول لحجز موعد"
+                : "You must be logged in to book an appointment",
+          ),
+        ),
       );
       return;
     }
 
     try {
-      String doctorEmail = "";
-
-      final doctorSnap = await FirebaseDatabase.instance
+      final doctorSnapshot = await FirebaseDatabase.instance
           .ref("doctors")
           .orderByChild("staffId")
           .equalTo(widget.staffId)
           .get();
 
-      if (doctorSnap.exists && doctorSnap.value is Map) {
-        final data = Map<String, dynamic>.from(doctorSnap.value as Map);
-        doctorEmail =
-            Map<String, dynamic>.from(data.values.first)['email'] ?? "";
+      String doctorEmail = "";
+      if (doctorSnapshot.exists) {
+        final data =
+        Map<String, dynamic>.from(doctorSnapshot.value as Map);
+        doctorEmail = data.values.first['email'] ?? "";
       }
 
       final ref =
@@ -107,68 +109,103 @@ class _DoctorDetailsPageState extends State<DoctorDetailsPage> {
         'doctorName': widget.doctorName,
         'doctorEmail': doctorEmail,
         'location': widget.address,
-        'patientEmail': user.email,
-        'patientName': user.displayName ?? "Patient",
+        'patientEmail': currentUser.email ?? '',
+        'patientName':
+        currentUser.displayName ?? 'Unknown Patient',
+        'date': '',
+        'time': '',
         'status': 'pending',
         'paid': false,
       });
 
-      _showSuccessDialog(context);
-    } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("$e")));
+      _showBookingDialog(context);
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isArabic ? "حدث خطأ أثناء الحجز" : "Booking failed",
+          ),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection:
-      isArabic ? TextDirection.rtl : TextDirection.ltr,
-      child: Scaffold(
-        backgroundColor: Colors.purple.shade50,
-        appBar: AppBar(
-          title: Text(widget.doctorName),
-          backgroundColor: Colors.purple,
-          centerTitle: true,
+    final bool isArabic =
+        Localizations.localeOf(context).languageCode == 'ar';
+
+    return Scaffold(
+      backgroundColor: Colors.purple.shade50,
+      appBar: AppBar(
+        title: Text(
+          widget.doctorName,
+          style: const TextStyle(color: Colors.white),
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+        backgroundColor: Colors.purple,
+        centerTitle: true,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               CircleAvatar(
                 radius: 60,
-                backgroundImage: _doctorImageUrl != null
-                    ? NetworkImage(_doctorImageUrl!)
-                    : null,
+                backgroundColor: Colors.purple.shade100,
+                backgroundImage:
+                _doctorImageUrl != null ? NetworkImage(_doctorImageUrl!) : null,
                 child: _doctorImageUrl == null
-                    ? const Icon(Icons.person, size: 60)
+                    ? const Icon(Icons.person,
+                    size: 60, color: Colors.purple)
                     : null,
               ),
-              const SizedBox(height: 16),
-
-              Text(widget.doctorName,
-                  style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.bold)),
-
-              Text(widget.specialization,
-                  style: const TextStyle(
-                      fontSize: 16, color: Colors.purple)),
 
               const SizedBox(height: 16),
 
-              _infoRow(_t("العنوان", "Address"), widget.address),
-              _infoRow(_t("الوصف", "Description"), widget.description),
-              _infoRow(_t("السعر", "Price"), "6 OMR"),
+              Text(
+                widget.doctorName,
+                style: const TextStyle(
+                    fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+
+              const SizedBox(height: 6),
+
+              Text(
+                widget.specialization,
+                style: const TextStyle(
+                    fontSize: 16, color: Colors.purple),
+              ),
+
+              const SizedBox(height: 12),
+
+              _detailRow(
+                  isArabic ? "العنوان" : "Address", widget.address),
+              _detailRow(isArabic ? "الوصف" : "Description",
+                  widget.description),
+              _detailRow(
+                  isArabic ? "السعر" : "Price", "6 OMR"),
+
+              const SizedBox(height: 16),
 
               if (widget.lat != null && widget.lng != null) ...[
-                const SizedBox(height: 20),
                 Align(
-                  alignment: isArabic
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
+                  alignment: Alignment.centerLeft,
                   child: Text(
-                    _t("الموقع", "Location"),
+                    isArabic ? "الموقع:" : "Location:",
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.bold),
                   ),
@@ -176,37 +213,53 @@ class _DoctorDetailsPageState extends State<DoctorDetailsPage> {
                 const SizedBox(height: 8),
                 SizedBox(
                   height: 200,
-                  child: GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                      target:
-                      LatLng(widget.lat!, widget.lng!),
-                      zoom: 14,
-                    ),
-                    markers: {
-                      Marker(
-                        markerId:
-                        const MarkerId("doctor"),
-                        position: LatLng(
-                            widget.lat!, widget.lng!),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target:
+                        LatLng(widget.lat!, widget.lng!),
+                        zoom: 14,
                       ),
-                    },
+                      markers: {
+                        Marker(
+                          markerId:
+                          const MarkerId("doctorLocation"),
+                          position:
+                          LatLng(widget.lat!, widget.lng!),
+                          icon: BitmapDescriptor
+                              .defaultMarkerWithHue(
+                              BitmapDescriptor.hueRose),
+                        ),
+                      },
+                      zoomControlsEnabled: false,
+                      myLocationButtonEnabled: false,
+                    ),
                   ),
                 ),
               ],
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () => _saveAppointment(context),
-                  icon: const Icon(Icons.calendar_month),
+                  onPressed: () =>
+                      _saveAppointmentToDatabase(context),
+                  icon: const Icon(Icons.calendar_month,
+                      color: Colors.white),
                   label: Text(
-                      _t("حجز موعد", "Book Appointment")),
+                    isArabic ? "حجز موعد" : "Book Appointment",
+                    style:
+                    const TextStyle(color: Colors.white),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.purple,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 14),
+                    padding:
+                    const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
@@ -217,44 +270,77 @@ class _DoctorDetailsPageState extends State<DoctorDetailsPage> {
     );
   }
 
-  Widget _infoRow(String title, String value) {
+  Widget _detailRow(String title, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("$title: ",
-              style:
-              const TextStyle(fontWeight: FontWeight.bold)),
-          Expanded(child: Text(value)),
+          Text(
+            "$title: ",
+            style: const TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 16),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  void _showSuccessDialog(BuildContext context) {
+  void _showBookingDialog(BuildContext context) {
+    final bool isArabic =
+        Localizations.localeOf(context).languageCode == 'ar';
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(_t("تم بنجاح", "Success")),
-        content: Text(_t(
-            "تم حجز الموعد بنجاح",
-            "Appointment booked successfully")),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (_) =>
-                    const BookedAppointmentsPage()),
-              );
-            },
-            child:
-            Text(_t("عرض مواعيدي", "My Appointments")),
+      barrierDismissible: false,
+      builder: (_) => Dialog(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircleAvatar(
+                radius: 35,
+                backgroundColor: Colors.green,
+                child:
+                Icon(Icons.check, color: Colors.white),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                isArabic
+                    ? "تم الحجز بنجاح!"
+                    : "Booked Successfully!",
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                      const BookedAppointmentsPage(),
+                    ),
+                  );
+                },
+                child: Text(isArabic
+                    ? "عرض مواعيدي"
+                    : "Show My Appointments"),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
