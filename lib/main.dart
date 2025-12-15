@@ -13,23 +13,22 @@ import 'PatientDashboardPage.dart';
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  debugPrint('Handling a background message: ${message.messageId}');
+  debugPrint('Handling background message: ${message.messageId}');
 }
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  final messaging = FirebaseMessaging.instance;
 
+  final messaging = FirebaseMessaging.instance;
   final settings = await messaging.requestPermission(
     alert: true,
     badge: true,
     sound: true,
   );
-
   debugPrint('Notification permission: ${settings.authorizationStatus}');
 
   final token = await messaging.getToken();
@@ -43,56 +42,116 @@ class MyApp extends StatefulWidget {
 
   @override
   State<MyApp> createState() => _MyAppState();
+
+  /// Global navigator key (so we can show SnackBar from notifications)
+  static final GlobalKey<NavigatorState> navigatorKey =
+  GlobalKey<NavigatorState>();
 }
 
 class _MyAppState extends State<MyApp> {
   ThemeMode _themeMode = ThemeMode.light;
   String _language = 'English';
 
-  static final GlobalKey<NavigatorState> navigatorKey =
-  GlobalKey<NavigatorState>();
+  /// ✅ Tutorial version (increase to show tutorial again for old users ONCE)
+  static const int tutorialVersion = 1;
 
   @override
   void initState() {
     super.initState();
+    _loadAppPrefs();
 
+    // Foreground notifications -> SnackBar
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       final notification = message.notification;
-      if (notification != null) {
-        final title = notification.title ?? 'New notification';
-        final body = notification.body ?? '';
+      if (notification == null) return;
 
-        final ctx = navigatorKey.currentContext;
-        if (ctx != null) {
-          ScaffoldMessenger.of(ctx).showSnackBar(
-            SnackBar(content: Text('$title\n$body')),
-          );
-        }
+      final title = notification.title ?? 'New notification';
+      final body = notification.body ?? '';
+
+      final ctx = MyApp.navigatorKey.currentContext;
+      if (ctx != null) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          SnackBar(content: Text('$title\n$body')),
+        );
+      }
+    });
+
+    // When user taps notification (app opens)
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('Notification tapped: ${message.messageId}');
+      // Optional: navigate somewhere later if you want
+    });
+  }
+
+  // ---------------------------
+  // Save / Load Theme & Language
+  // ---------------------------
+  Future<void> _loadAppPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedLang = prefs.getString('app_language');
+    final savedDark = prefs.getBool('app_dark_mode');
+
+    if (!mounted) return;
+    setState(() {
+      if (savedLang != null) _language = savedLang;
+      if (savedDark != null) {
+        _themeMode = savedDark ? ThemeMode.dark : ThemeMode.light;
       }
     });
   }
 
+  Future<void> _saveLanguage(String lang) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_language', lang);
+  }
+
+  Future<void> _saveTheme(bool isDark) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('app_dark_mode', isDark);
+  }
+
+  // ---------------------------
+  // ✅ Tutorial check (Versioned + keeps your old key)
+  // ---------------------------
   Future<bool> _checkTutorial() async {
     final prefs = await SharedPreferences.getInstance();
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return false;
 
-    final key = "tutorial_completed_${user.uid}";
-    return prefs.getBool(key) ?? false;
-  }
+    final uid = user.uid;
 
+    final versionKey = "tutorial_version_$uid";
+    final oldBoolKey = "tutorial_completed_$uid";
+
+    final savedVersion = prefs.getInt(versionKey) ?? 0;
+
+    // If completed current tutorial version -> done
+    if (savedVersion >= tutorialVersion) return true;
+
+    // ✅ Migration: if old bool key was true, mark version as completed
+    // so old users DON'T suddenly see tutorial after this update
+    final oldCompleted = prefs.getBool(oldBoolKey) ?? false;
+    if (oldCompleted && savedVersion == 0) {
+      await prefs.setInt(versionKey, tutorialVersion);
+      return true;
+    }
+
+    // Otherwise not completed -> show tutorial
+    return false;
+  }
   void _toggleTheme(bool isDarkMode) {
     setState(() {
       _themeMode = isDarkMode ? ThemeMode.dark : ThemeMode.light;
     });
+    _saveTheme(isDarkMode);
   }
 
   void _changeLanguage(String? selectedLang) {
-    if (selectedLang != null) {
-      setState(() {
-        _language = selectedLang;
-      });
-    }
+    if (selectedLang == null) return;
+    setState(() {
+      _language = selectedLang;
+    });
+    _saveLanguage(selectedLang);
   }
 
   @override
@@ -100,7 +159,7 @@ class _MyAppState extends State<MyApp> {
     final bool isArabic = _language == 'Arabic';
 
     return MaterialApp(
-      navigatorKey: _MyAppState.navigatorKey,
+      navigatorKey: MyApp.navigatorKey,
       debugShowCheckedModeBanner: false,
       title: isArabic ? 'نظام شفاء' : 'Heal System',
 
@@ -137,6 +196,7 @@ class _MyAppState extends State<MyApp> {
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, authSnap) {
+          // Not logged in -> show HealSystem
           if (!authSnap.hasData) {
             return HealSystem(
               title: isArabic ? 'نظام شفاء' : 'Heal System',
@@ -146,6 +206,8 @@ class _MyAppState extends State<MyApp> {
               isDarkMode: _themeMode == ThemeMode.dark,
             );
           }
+
+          // Logged in -> tutorial then dashboard
           return FutureBuilder<bool>(
             future: _checkTutorial(),
             builder: (context, tutSnap) {
@@ -195,19 +257,23 @@ class _HealSystemState extends State<HealSystem> {
   Widget build(BuildContext context) {
     final bool isArabic = widget.currentLanguage == 'Arabic';
 
-    final welcomeText       = isArabic ? 'أهلاً بك!' : 'Welcome!';
-    final chooseLoginText   = isArabic ? 'اختر نوع تسجيل الدخول:' : 'Choose login type:';
-    final doctorLoginText   = isArabic ? 'تسجيل دخول دكتور' : 'Doctor Login';
-    final adminLoginText    = isArabic ? 'تسجيل دخول مشرف' : 'Admin Login';
-    final contactUsText     = isArabic ? 'تواصل معنا' : 'Contact Us';
-    final changeLangText    = isArabic ? 'تغيير اللغة' : 'Change Language';
-    final darkModeText      = isArabic ? 'الوضع الداكن' : 'Dark Mode';
+    final welcomeText = isArabic ? 'أهلاً بك!' : 'Welcome!';
+    final chooseLoginText =
+    isArabic ? 'اختر نوع تسجيل الدخول:' : 'Choose login type:';
+    final doctorLoginText = isArabic ? 'تسجيل دخول دكتور' : 'Doctor Login';
+    final adminLoginText = isArabic ? 'تسجيل دخول مشرف' : 'Admin Login';
+    final contactUsText = isArabic ? 'تواصل معنا' : 'Contact Us';
+    final changeLangText = isArabic ? 'تغيير اللغة' : 'Change Language';
+    final darkModeText = isArabic ? 'الوضع الداكن' : 'Dark Mode';
 
-    final welcomeTitle      = isArabic ? 'مرحباً بك في نظام شفاء' : 'Welcome to Heal System';
-    final welcomeDesc       = isArabic
+    final welcomeTitle =
+    isArabic ? 'مرحباً بك في نظام شفاء' : 'Welcome to Heal System';
+    final welcomeDesc = isArabic
         ? 'مساحة رعاية لكل امرأة ولكل رحلة حمل. تابعي صحتك، تواصلي مع الأطباء، وأشعري بالدعم في كل خطوة.'
         : 'A caring space for every woman and every pregnancy journey. Track health, connect with doctors, and feel supported every step of the way.';
-    final getStartedText    = isArabic ? 'ابدئي الآن' : 'Get Started';
+    final getStartedText = isArabic ? 'ابدئي الآن' : 'Get Started';
+
+    final onSurface = Theme.of(context).colorScheme.onSurface;
 
     return Scaffold(
       appBar: AppBar(
@@ -218,6 +284,7 @@ class _HealSystemState extends State<HealSystem> {
         ),
         centerTitle: true,
       ),
+
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -248,6 +315,7 @@ class _HealSystemState extends State<HealSystem> {
                 ],
               ),
             ),
+
             ListTile(
               leading: const Icon(Icons.medical_services),
               title: Text(doctorLoginText),
@@ -260,6 +328,7 @@ class _HealSystemState extends State<HealSystem> {
                 );
               },
             ),
+
             ListTile(
               leading: const Icon(Icons.admin_panel_settings),
               title: Text(adminLoginText),
@@ -272,6 +341,7 @@ class _HealSystemState extends State<HealSystem> {
                 );
               },
             ),
+
             ListTile(
               leading: const Icon(Icons.contact_page),
               title: Text(contactUsText),
@@ -286,6 +356,7 @@ class _HealSystemState extends State<HealSystem> {
                 );
               },
             ),
+
             ListTile(
               leading: const Icon(Icons.language),
               title: Text(changeLangText),
@@ -304,6 +375,7 @@ class _HealSystemState extends State<HealSystem> {
                 onChanged: widget.onLanguageChanged,
               ),
             ),
+
             SwitchListTile(
               title: Text(darkModeText),
               value: widget.isDarkMode,
@@ -313,6 +385,7 @@ class _HealSystemState extends State<HealSystem> {
           ],
         ),
       ),
+
       body: Center(
         child: SingleChildScrollView(
           child: Column(
@@ -341,10 +414,12 @@ class _HealSystemState extends State<HealSystem> {
                     image: AssetImage('images/logo.png'),
                     height: 120,
                     width: 120,
+                    fit: BoxFit.cover,
                   ),
                 ),
               ),
               const SizedBox(height: 24),
+
               Text(
                 welcomeTitle,
                 style: const TextStyle(
@@ -355,18 +430,20 @@ class _HealSystemState extends State<HealSystem> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
+
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Text(
                   welcomeDesc,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
-                    color: Colors.black87,
+                    color: onSurface.withOpacity(0.85),
                   ),
                   textAlign: TextAlign.center,
                 ),
               ),
               const SizedBox(height: 24),
+
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF8A2BE2),
