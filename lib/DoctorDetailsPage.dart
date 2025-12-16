@@ -65,7 +65,7 @@ class _DoctorDetailsPageState extends State<DoctorDetailsPage> {
       final url = await ref.getDownloadURL();
       setState(() => _doctorImageUrl = url);
     } catch (e) {
-      debugPrint("Image load failed: $e");
+      debugPrint("⚠️ Image load failed: $e");
     }
   }
 
@@ -107,16 +107,18 @@ class _DoctorDetailsPageState extends State<DoctorDetailsPage> {
       await ref.set({
         'appointmentId': ref.key,
         'doctorName': widget.doctorName,
-        'doctorEmail': doctorEmail,
+        'doctorEmail': doctorEmail.trim().toLowerCase(),
         'location': widget.address,
-        'patientEmail': currentUser.email ?? '',
-        'patientName':
-        currentUser.displayName ?? 'Unknown Patient',
+        'patientEmail': (currentUser.email ?? '').trim().toLowerCase(),
+        'patientName': currentUser.displayName ?? 'Unknown Patient',
         'date': '',
         'time': '',
         'status': 'pending',
         'paid': false,
+        'startMeeting': false,
+        'roomId': '',
       });
+
 
       _showBookingDialog(context);
     } catch (_) {
@@ -201,6 +203,7 @@ class _DoctorDetailsPageState extends State<DoctorDetailsPage> {
 
               const SizedBox(height: 16),
 
+              // ===== LOCATION MAP =====
               if (widget.lat != null && widget.lng != null) ...[
                 Align(
                   alignment: Alignment.centerLeft,
