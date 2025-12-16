@@ -12,83 +12,42 @@ class AcceptAppointmentsPage extends StatefulWidget {
   State<AcceptAppointmentsPage> createState() => _AcceptAppointmentsPageState();
 }
 
-class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
-    with WidgetsBindingObserver {
+class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage> {
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref("appointments");
 
-  final String? currentDoctorEmail = FirebaseAuth.instance.currentUser?.email;
-
   StreamSubscription<DatabaseEvent>? _apptSub;
-
-  final JitsiMeet _jitsiMeet = JitsiMeet();
 
   List<Map<dynamic, dynamic>> pendingAppointments = [];
   List<Map<dynamic, dynamic>> acceptedAppointments = [];
 
-  bool _meetingInProgress = false;
-  String? _activeAppointmentKey;
-  DatabaseReference? _activeCallRef;
+  String _normEmail(String? email) => (email ?? '').trim().toLowerCase();
+  String _safeEmail(String email) => email.trim().toLowerCase().replaceAll('.', '_');
+
+  bool _isToday(String yyyyMmDd) {
+    final d = DateTime.tryParse(yyyyMmDd);
+    if (d == null) return false;
+    final now = DateTime.now();
+    return d.year == now.year && d.month == now.month && d.day == now.day;
+  }
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _fetchAppointments();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _apptSub?.cancel();
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _meetingInProgress) {
-      _endMeetingCleanup();
-    }
-  }
-
-  Future<void> _endMeetingCleanup() async {
-    final apptKey = _activeAppointmentKey;
-    try {
-      if (apptKey != null) {
-        await _dbRef.child(apptKey).update({"startMeeting": false});
-      }
-      await _activeCallRef?.remove();
-    } catch (_) {
-    }
-
-    _meetingInProgress = false;
-    _activeAppointmentKey = null;
-    _activeCallRef = null;
-  }
-
-  String _safeEmail(String email) =>
-      email.trim().toLowerCase().replaceAll('.', '_');
-
-  DateTime _parseDateFlexible(String s) {
-    s = s.trim();
-    final d1 = DateTime.tryParse(s);
-    if (d1 != null) return d1;
-
-    return DateFormat('dd-MM-yyyy').parseStrict(s);
-  }
-
-  bool _isTodayDateString(String yyyyMmDd) {
-    try {
-      final d = _parseDateFlexible(yyyyMmDd);
-      final now = DateTime.now();
-      return d.year == now.year && d.month == now.month && d.day == now.day;
-    } catch (_) {
-      return false;
-    }
-  }
-
+  // ================= FETCH APPOINTMENTS =================
   void _fetchAppointments() {
     _apptSub = _dbRef.onValue.listen((event) {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
+
+      final currentDoctorEmail = _normEmail(FirebaseAuth.instance.currentUser?.email);
 
       if (data == null) {
         if (mounted) {
@@ -107,10 +66,17 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
         final appt = Map<dynamic, dynamic>.from(value);
         appt['id'] = key;
 
-        if (currentDoctorEmail != null && appt['doctorEmail'] == currentDoctorEmail) {
+        final apptDoctorEmail = _normEmail(appt['doctorEmail']?.toString());
+
+        // ✅ robust match (trim + lowercase)
+        if (currentDoctorEmail.isNotEmpty && apptDoctorEmail == currentDoctorEmail) {
           final status = (appt['status'] ?? '').toString().toLowerCase();
-          if (status == 'pending') pending.add(appt);
-          if (status == 'accepted') accepted.add(appt);
+
+          if (status == 'pending') {
+            pending.add(appt);
+          } else if (status == 'accepted') {
+            accepted.add(appt);
+          }
         }
       });
 
@@ -123,7 +89,7 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
     });
   }
 
-  // ================= ACCEPT (SET DATE/TIME + startMeeting false) =================
+  // ================= ACCEPT APPOINTMENT (WITH VALIDATION) =================
   void _acceptAppointment(Map<dynamic, dynamic> appointment) {
     final dateController = TextEditingController();
     final timeController = TextEditingController();
@@ -138,7 +104,7 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
             TextField(
               controller: dateController,
               decoration: const InputDecoration(
-                labelText: "Date (YYYY-MM-DD or DD-MM-YYYY)",
+                labelText: "Date (YYYY-MM-DD)",
                 icon: Icon(Icons.calendar_today, color: Colors.purple),
               ),
             ),
@@ -174,30 +140,35 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
                   throw "Please enter date and time";
                 }
 
-                final selectedDate = _parseDateFlexible(dateText);
+                // date validation
+                final selectedDate = DateTime.parse(dateText);
                 final now = DateTime.now();
                 final today = DateTime(now.year, now.month, now.day);
                 final onlyDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-                if (onlyDate.isBefore(today)) {
-                  throw "Date must be today or later";
-                }
+                if (onlyDate.isBefore(today)) throw "Date must be today or later";
 
-                final savedDate = DateFormat('yyyy-MM-dd').format(selectedDate);
-
+                // time validation
                 final timeFormat = DateFormat("h:mm a");
-                final selectedTime = timeFormat.parseStrict(timeText);
-                final minTime = timeFormat.parseStrict("7:30 AM");
-                final maxTime = timeFormat.parseStrict("9:00 PM");
-
+                final selectedTime = timeFormat.parse(timeText);
+                final minTime = timeFormat.parse("7:30 AM");
+                final maxTime = timeFormat.parse("3:00 PM");
                 if (selectedTime.isBefore(minTime) || selectedTime.isAfter(maxTime)) {
                   throw "Time must be between 7:30 AM and 3:00 PM";
                 }
 
-                await _dbRef.child(appointment['id']).update({
+                final apptKey = appointment['id'].toString();
+                final patientEmail = _normEmail(appointment['patientEmail']?.toString());
+                if (patientEmail.isEmpty) throw "Patient email missing in appointment";
+
+                // ✅ Unique room per appointment + patient email
+                final roomId = "appt_${_safeEmail(patientEmail)}_$apptKey";
+
+                await _dbRef.child(apptKey).update({
                   "status": "accepted",
-                  "date": savedDate,
+                  "date": dateText,
                   "time": timeText,
                   "startMeeting": false,
+                  "roomId": roomId, // ✅ store room for both sides
                 });
 
                 if (mounted) Navigator.pop(context);
@@ -217,8 +188,12 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
     );
   }
 
+  // ================= REJECT =================
   Future<void> _rejectAppointment(Map<dynamic, dynamic> appointment) async {
-    await _dbRef.child(appointment['id']).update({
+    final id = appointment['id']?.toString() ?? '';
+    if (id.isEmpty) return;
+
+    await _dbRef.child(id).update({
       "status": "rejected",
       "startMeeting": false,
     });
@@ -228,13 +203,14 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
     );
   }
 
+  // ================= START MEETING =================
   Future<void> _startMeetingForAppointment(Map<dynamic, dynamic> appt) async {
-    final apptKey = (appt['id'] ?? '').toString();
-    final patientEmail = (appt['patientEmail'] ?? '').toString().trim();
+    final appointmentId = (appt['id'] ?? '').toString();
+    final patientEmail = _normEmail(appt['patientEmail']?.toString());
     final patientName = (appt['patientName'] ?? 'Patient').toString();
     final apptDate = (appt['date'] ?? '').toString().trim();
 
-    if (apptKey.isEmpty) {
+    if (appointmentId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Appointment ID missing"), backgroundColor: Colors.red),
       );
@@ -248,50 +224,63 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
       return;
     }
 
-    // Must be today
-    if (apptDate.isEmpty || !_isTodayDateString(apptDate)) {
+    // ✅ keep your rule (today only)
+    if (apptDate.isEmpty || !_isToday(apptDate)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Meeting can only start on the appointment date (today)."),
+          content: Text("Meeting can only start on the appointment date"),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
+    // ✅ IMPORTANT: use the stored roomId (unique + same for both)
+    final roomId = (appt['roomId'] ?? '').toString().trim().isNotEmpty
+        ? (appt['roomId'] ?? '').toString().trim()
+        : "appt_${_safeEmail(patientEmail)}_$appointmentId";
+
     final safePatientEmail = _safeEmail(patientEmail);
-    final roomId = "appointment_$apptKey";
 
     final callRef = FirebaseDatabase.instance.ref("incomingCalls/$safePatientEmail");
 
-    // ✅ Update DB flag
-    await _dbRef.child(apptKey).update({"startMeeting": true});
+    // ✅ flip startMeeting in appointment
+    await _dbRef.child(appointmentId).update({"startMeeting": true});
 
-    // ✅ Trigger patient popup node (also includes startMeeting)
+    // ✅ send to patient listener
     await callRef.set({
       "active": true,
-      "startMeeting": true,
-      "appointmentId": apptKey,
-      "roomId": roomId,
+      "appointmentId": appointmentId, // ✅ required for patient to check startMeeting
+      "roomId": roomId,               // ✅ same room on both sides
       "doctorName": FirebaseAuth.instance.currentUser?.displayName ?? "Doctor",
       "doctorEmail": FirebaseAuth.instance.currentUser?.email ?? "",
       "ts": ServerValue.timestamp,
     });
 
-    // Track for cleanup when we return from Jitsi
-    _meetingInProgress = true;
-    _activeAppointmentKey = apptKey;
-    _activeCallRef = callRef;
+    final jitsiMeet = JitsiMeet();
 
-    // Join Jitsi room
-    _jitsiMeet.join(
+    final listener = JitsiMeetEventListener(
+      conferenceJoined: (url) => debugPrint("Doctor joined: $url"),
+      conferenceTerminated: (url, error) async {
+        debugPrint("Doctor terminated: $url error=$error");
+        await _dbRef.child(appointmentId).update({"startMeeting": false});
+        await callRef.remove();
+      },
+      readyToClose: () async {
+        debugPrint("Doctor readyToClose");
+        await _dbRef.child(appointmentId).update({"startMeeting": false});
+        await callRef.remove();
+      },
+    );
+
+    jitsiMeet.join(
       JitsiMeetConferenceOptions(
         room: roomId,
         configOverrides: {
           "startWithAudioMuted": false,
           "startWithVideoMuted": false,
-          "enableWelcomePage": false,
           "startWithLobbyEnabled": false,
+          "enableWelcomePage": false,
         },
         featureFlags: {
           "prejoinpage.enabled": false,
@@ -302,6 +291,7 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
           email: FirebaseAuth.instance.currentUser?.email,
         ),
       ),
+      listener,
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -309,9 +299,12 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
     );
   }
 
+  // ================= UI =================
   @override
   Widget build(BuildContext context) {
-    if (currentDoctorEmail == null) {
+    final currentDoctorEmail = _normEmail(FirebaseAuth.instance.currentUser?.email);
+
+    if (currentDoctorEmail.isEmpty) {
       return const Scaffold(
         body: Center(child: Text("Please login as a doctor first.")),
       );
@@ -326,8 +319,10 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text("Pending Appointments",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            "Pending Appointments",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
 
           if (pendingAppointments.isEmpty)
@@ -370,16 +365,18 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
           const Divider(),
           const SizedBox(height: 8),
 
-          const Text("Accepted Appointments",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const Text(
+            "Accepted Appointments",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
 
           if (acceptedAppointments.isEmpty)
             const Text("No accepted appointments yet.")
           else
             ...acceptedAppointments.map((appt) {
-              final date = (appt['date'] ?? '').toString().trim();
-              final canStart = date.isNotEmpty && _isTodayDateString(date);
+              final date = (appt['date'] ?? '').toString();
+              final canStart = date.isNotEmpty && _isToday(date);
               final started = (appt['startMeeting'] == true);
 
               return Card(
@@ -400,17 +397,10 @@ class _AcceptAppointmentsPageState extends State<AcceptAppointmentsPage>
                         "startMeeting: $started",
                         style: TextStyle(color: started ? Colors.green : Colors.grey),
                       ),
-                      if (!canStart)
-                        const Text(" You can start only on appointment day (today)",
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
                     ],
                   ),
                   trailing: IconButton(
-                    icon: Icon(
-                      Icons.video_call,
-                      size: 32,
-                      color: canStart ? Colors.purple : Colors.grey,
-                    ),
+                    icon: Icon(Icons.video_call, size: 32, color: canStart ? Colors.purple : Colors.grey),
                     onPressed: canStart ? () => _startMeetingForAppointment(appt) : null,
                   ),
                 ),
